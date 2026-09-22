@@ -61,6 +61,21 @@ h2{font-size:18px}
 .lede{color:var(--ink-2); max-width:64ch; margin:10px 0 0}
 header.top{border-bottom:1px solid var(--line); padding-bottom:20px; margin-bottom:22px}
 
+.tabs{display:flex; gap:4px; border-bottom:1px solid var(--line); margin:-2px 0 22px; flex-wrap:wrap}
+.tabs button{background:transparent; border:0; border-bottom:2px solid transparent; color:var(--ink-3);
+  border-radius:0; padding:9px 14px; font-weight:600; font-size:13.5px; margin-bottom:-1px}
+.tabs button:hover{color:var(--ink); background:transparent; filter:none}
+.tabs button[aria-selected="true"]{color:var(--accent-ink); border-bottom-color:var(--accent)}
+.sync{display:inline-flex; align-items:center; gap:7px; margin-left:auto; padding:6px 10px; font-size:12px;
+  color:var(--ink-3); align-self:center}
+.sync .dot{width:8px; height:8px; border-radius:50%; background:var(--ink-3); flex:none}
+.sync.live .dot{background:var(--accent)}
+.sync.ko .dot{background:var(--warn)}
+.cov{font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums}
+.snaplist{margin:0; padding-left:20px; font-family:"IBM Plex Mono",monospace; font-size:12px;
+  color:var(--ink-2); display:flex; flex-direction:column; gap:3px}
+.est{color:var(--warn); font-style:normal}
+.est::after{content:" ~"}
 .layout{display:grid; gap:18px; align-items:start}
 @media (min-width:1000px){ .layout{grid-template-columns:300px minmax(0,1fr)} }
 .panel{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:16px; box-shadow:var(--shadow)}
@@ -195,6 +210,13 @@ details.meth ul{padding-left:18px; margin:10px 0 0; color:var(--ink-2); font-siz
   Colle ta liste de pillage, l&rsquo;outil en d&eacute;duit les groupes, les troupes et l&rsquo;heure de chaque d&eacute;part.</p>
 </header>
 
+<nav class="tabs" role="tablist">
+  <button type="button" id="tab-plan-btn" role="tab" aria-selected="true" aria-controls="tab-plan">Planification</button>
+  <button type="button" id="tab-yield-btn" role="tab" aria-selected="false" aria-controls="tab-yield">Rendement des fermes</button>
+  <span class="sync" id="sync"><span class="dot"></span><span id="syncTxt">Navigateur seul</span></span>
+</nav>
+
+<section id="tab-plan" role="tabpanel" aria-labelledby="tab-plan-btn">
 <div class="layout">
 
   <aside class="panel">
@@ -334,6 +356,55 @@ details.meth ul{padding-left:18px; margin:10px 0 0; color:var(--ink-2); font-siz
 
   </div>
 </div>
+</section>
+
+<section id="tab-yield" role="tabpanel" aria-labelledby="tab-yield-btn" hidden>
+  <div class="stack">
+
+    <div class="tiles">
+      <div class="tile lead"><span class="k">Butin par heure</span><span class="v" id="yRate">&mdash;</span><span class="s" id="yRateSub">&nbsp;</span></div>
+      <div class="tile"><span class="k">Derni&egrave;re heure</span><span class="v" id="y1">&mdash;</span><span class="s" id="y1Sub">&nbsp;</span></div>
+      <div class="tile"><span class="k">Sur 12 h</span><span class="v" id="y12">&mdash;</span><span class="s" id="y12Sub">&nbsp;</span></div>
+      <div class="tile"><span class="k">Sur 24 h</span><span class="v" id="y24">&mdash;</span><span class="s" id="y24Sub">&nbsp;</span></div>
+    </div>
+
+    <div id="cov" class="status warn" hidden><span class="dot"></span><span id="covTxt"></span></div>
+
+    <section class="panel">
+      <h2>Enregistrer un relev&eacute;</h2>
+      <p class="hint">Colle la m&ecirc;me page que pour la planification. Chaque ferme y porte son butin cumul&eacute; ; c&rsquo;est l&rsquo;&eacute;cart entre deux relev&eacute;s qui donne le butin r&eacute;ellement rapport&eacute;. Un relev&eacute; de temps en temps suffit &mdash; plus ils sont espac&eacute;s dans le temps, plus les fen&ecirc;tres 12 h et 24 h deviennent r&eacute;elles.</p>
+      <textarea id="yPaste" spellcheck="false" placeholder="Colle ici la page de ta liste de pillage, enti&egrave;re."></textarea>
+      <div class="btns" style="margin-top:10px">
+        <button type="button" id="ySave">Enregistrer ce relev&eacute;</button>
+        <button type="button" class="ghost" id="yClear">Vider</button>
+      </div>
+      <p class="parse-msg" id="yMsg"></p>
+    </section>
+
+    <section class="panel">
+      <h2>Rendement par ferme</h2>
+      <p class="hint">Butin mesur&eacute; entre relev&eacute;s. Une valeur suivie de <span class="est">~</span> est extrapol&eacute;e : l&rsquo;historique ne couvre pas encore la fen&ecirc;tre.</p>
+      <div class="tscroll">
+        <table style="min-width:720px">
+          <thead><tr>
+            <th>Ferme</th><th>Coord.</th><th class="r">Butin/h</th><th class="r">1 h</th>
+            <th class="r">12 h</th><th class="r">24 h</th><th class="r">Dernier pillage</th><th class="r">Cumul</th>
+          </tr></thead>
+          <tbody id="yBody"></tbody>
+          <tfoot id="yFoot"></tfoot>
+        </table>
+      </div>
+      <details class="meth">
+        <summary>Historique des relev&eacute;s</summary>
+        <div id="ySnaps" style="margin-top:10px"></div>
+        <div class="btns" style="margin-top:12px">
+          <button type="button" class="ghost" id="yForget">Effacer tout l&rsquo;historique</button>
+        </div>
+      </details>
+    </section>
+
+  </div>
+</section>
 </div>
 <script>
 (function(){
@@ -466,7 +537,7 @@ function stripInvis(str){
 }
 
 function scanLine(line){
-  var f = {name:"", x:null, y:null, nums:[]};
+  var f = {name:"", x:null, y:null, nums:[], times:[]};
   var rest = stripInvis(line);
 
   COORD_RE.lastIndex = 0;
@@ -478,7 +549,10 @@ function scanLine(line){
   COORD_RE.lastIndex = 0;
   rest = rest.replace(COORD_RE, " ");
   /* heures d'arrivee, totaux prefixes d'un sigma, pourcentages : jamais des distances */
-  rest = rest.replace(TIME_RE, " ").replace(SUM_RE, " ").replace(PCT_RE, " ");
+  /* Les heures ne sont pas des distances, mais l'heure du dernier pillage
+     nous interesse : on la retient au lieu de la perdre. */
+  rest = rest.replace(TIME_RE, function(m){ f.times.push(m); return " "; })
+             .replace(SUM_RE, " ").replace(PCT_RE, " ");
 
   var mm;
   NUM_RE.lastIndex = 0;
@@ -519,7 +593,7 @@ function parseFarmList(text, useTroops, forcedCol){
   var lines = text.split(/\r?\n/);
   var recs = [], cur = null, coordCount = 0;
 
-  function fresh(){ return {name:"", x:null, y:null, nums:[]}; }
+  function fresh(){ return {name:"", x:null, y:null, nums:[], times:[]}; }
   function flush(){
     if (cur && (cur.name || cur.x !== null || cur.nums.length)) recs.push(cur);
     cur = null;
@@ -531,7 +605,9 @@ function parseFarmList(text, useTroops, forcedCol){
     var f = scanLine(lines[i]);
     var tr = {i: i + 1, raw: lines[i], name: f.name, x: f.x, y: f.y,
               nums: f.nums.map(function(o){ return o.v; }), act: ""};
-    if (!f.name && f.x === null && !f.nums.length){
+    /* une ligne qui ne porte qu'une heure n'est pas vide : c'est l'heure
+       du dernier pillage de la ferme en cours */
+    if (!f.name && f.x === null && !f.nums.length && !f.times.length){
       tr.act = "ignoree"; trace.push(tr); continue;
     }
     if (f.x !== null) coordCount++;
@@ -543,6 +619,7 @@ function parseFarmList(text, useTroops, forcedCol){
     if (f.name && !cur.name) cur.name = f.name;
     if (f.x !== null && cur.x === null){ cur.x = f.x; cur.y = f.y; }
     cur.nums = cur.nums.concat(f.nums);
+    cur.times = cur.times.concat(f.times);
     tr.act = opened ? "nouvelle ferme" : "meme ferme";
     trace.push(tr);
   }
@@ -555,6 +632,7 @@ function parseFarmList(text, useTroops, forcedCol){
     var A = recs[q], B = recs[q + 1];
     if (A.name && A.x !== null && !A.nums.length && B.x === null && B.nums.length){
       A.nums = A.nums.concat(B.nums);
+      A.times = A.times.concat(B.times);
       recs.splice(q + 1, 1);
       q--;
     }
@@ -566,7 +644,7 @@ function parseFarmList(text, useTroops, forcedCol){
   var col = (forcedCol !== null && forcedCol !== undefined && forcedCol >= 0)
     ? forcedCol : inferDistCol(candidates.length ? candidates : recs);
 
-  var items = [], rejected = [], seen = {};
+  var items = [], releve = [], rejected = [], seen = {};
   for (var r2 = 0; r2 < recs.length; r2++){
     var rec = recs[r2];
     var dist = null, usedIdx = -1;
@@ -589,14 +667,43 @@ function parseFarmList(text, useTroops, forcedCol){
     var key = rec.x + "|" + rec.y;
     if (seen[key]) continue;
     seen[key] = 1;
-    items.push(blank({name:rec.name.slice(0,48), x:rec.x, y:rec.y, dist:dist, wave:wave}));
+    var nom = rec.name.slice(0, 48);
+    items.push(blank({name:nom, x:rec.x, y:rec.y, dist:dist, wave:wave}));
+
+    /* Colonne "Dernier pillage" : apres la distance et les troupes viennent
+       le butin du dernier raid puis le cumul. Le cumul contient le dernier
+       raid, donc il lui est toujours superieur ou egal : c'est ce qui les
+       departage sans dependre de l'ordre des colonnes. */
+    var apres = rec.nums.slice(usedIdx + 2), butin = null, cumul = null;
+    if (apres.length >= 2){
+      var a = apres[apres.length - 2].v, b = apres[apres.length - 1].v;
+      cumul = Math.max(a, b); butin = Math.min(a, b);
+    } else if (apres.length === 1){
+      cumul = apres[0].v;
+    }
+    releve.push({
+      key: key, name: nom, x: rec.x, y: rec.y,
+      cumul: cumul, butin: butin,
+      heure: rec.times.length ? rec.times[0] : null
+    });
   }
 
   return {
-    items: items, rejected: rejected, col: col, trace: trace,
+    items: items, releve: releve, rejected: rejected, col: col, trace: trace,
     width: recs.reduce(function(a, r){ return Math.max(a, r.nums.length); }, 0),
     coordCount: coordCount, recCount: recs.length
   };
+}
+
+/* L'heure du serveur figure dans la page collee : elle sert de reference
+   aux fenetres 1 h / 12 h / 24 h, et evite de dependre de l'horloge du poste. */
+var SRVTIME_RE = /(?:heure du serveur|server\s*time|serverzeit|hora del servidor|ora del server)\s*:?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/i;
+function findServerTime(text){
+  var m = SRVTIME_RE.exec(stripInvis(text));
+  if (!m) return null;
+  var h = parseInt(m[1], 10), mn = parseInt(m[2], 10), sc = m[3] ? parseInt(m[3], 10) : 0;
+  if (h > 23 || mn > 59 || sc > 59) return null;
+  return {h:h, m:mn, s:sc, txt: (h<10?"0":"") + h + ":" + (mn<10?"0":"") + mn + ":" + (sc<10?"0":"") + sc};
 }
 
 function describeRec(rec){
@@ -796,6 +903,262 @@ function render(){
   renderTiles(rows);
   renderChart(rows);
   save();
+}
+
+/* ==================================================================
+   Rendement des fermes.
+
+   Le principe tient en une ligne : la liste de pillage affiche pour
+   chaque ferme un butin CUMULE. Deux relevés espacés dans le temps
+   donnent donc le butin réellement rapporté sur l'intervalle, sans
+   avoir à lire le moindre rapport de combat.
+
+        butin(t0 -> t1)  =  cumul(t1) - cumul(t0)
+
+   Si le cumul baisse, c'est une remise à zéro et non un butin
+   négatif : l'intervalle est écarté plutôt que compté à l'envers.
+   ================================================================== */
+
+var SNAPS = [];                       /* relevés, triés du plus ancien au plus récent */
+var SNAP_STORE = "plan-razzia-snaps";
+var H = 3600000;
+
+function snapsLoad(){
+  try{
+    var raw = localStorage.getItem(SNAP_STORE);
+    if (raw){ var d = JSON.parse(raw); if (Array.isArray(d)) SNAPS = d; }
+  }catch(e){}
+  snapsTidy();
+}
+function snapsSave(){
+  try{ localStorage.setItem(SNAP_STORE, JSON.stringify(SNAPS)); }catch(e){}
+}
+function snapsTidy(){
+  var vus = {}, out = [];
+  SNAPS.forEach(function(s){
+    if (!s || !s.t || !s.f) return;
+    if (vus[s.t]) return;
+    vus[s.t] = 1; out.push(s);
+  });
+  out.sort(function(a, b){ return a.t - b.t; });
+  var limite = Date.now() - 30 * 24 * H;
+  SNAPS = out.filter(function(s){ return s.t >= limite; });
+}
+
+/* Fusionne ce qui vient de Firebase avec ce qui est déjà là. */
+function snapsMerge(objet){
+  if (!objet) return false;
+  var avant = SNAPS.length;
+  for (var k in objet){
+    var v = objet[k];
+    if (!v || !v.f) continue;
+    SNAPS.push({t: parseInt(k, 10), st: v.st || null, f: v.f});
+  }
+  snapsTidy();
+  if (SNAPS.length !== avant){ snapsSave(); return true; }
+  return false;
+}
+
+function snapAdd(releve, heureServeur){
+  var f = {}, n = 0;
+  releve.forEach(function(r){
+    if (r.cumul === null) return;
+    f[r.key] = {c: r.cumul, b: r.butin, h: r.heure, n: r.name};
+    n++;
+  });
+  if (!n) return null;
+  var snap = {t: Date.now(), st: heureServeur ? heureServeur.txt : null, f: f};
+  SNAPS.push(snap);
+  snapsTidy();
+  snapsSave();
+  dbPush(snap);
+  return snap;
+}
+
+function snapPremier(){ return SNAPS.length ? SNAPS[0] : null; }
+function snapDernier(){ return SNAPS.length ? SNAPS[SNAPS.length - 1] : null; }
+
+/* Le relevé le plus proche d'un instant, si l'écart reste acceptable. */
+function snapProche(t, tolerance){
+  var best = null, ecart = Infinity;
+  for (var i = 0; i < SNAPS.length; i++){
+    var d = Math.abs(SNAPS[i].t - t);
+    if (d < ecart){ ecart = d; best = SNAPS[i]; }
+  }
+  return (best && ecart <= tolerance) ? best : null;
+}
+
+/* Butin par ferme entre deux relevés. */
+function ecart(s0, s1){
+  var parFerme = {}, total = 0;
+  if (!s0 || !s1 || s0.t >= s1.t) return {parFerme: parFerme, total: 0, remises: 0};
+  var remises = 0;
+  for (var k in s1.f){
+    if (!s0.f[k]) continue;
+    var d = s1.f[k].c - s0.f[k].c;
+    if (d < 0){ remises++; continue; }
+    parFerme[k] = d; total += d;
+  }
+  return {parFerme: parFerme, total: total, remises: remises};
+}
+
+/* Couverture réelle de l'historique, en millisecondes. */
+function couverture(){
+  var a = snapPremier(), b = snapDernier();
+  return (a && b && b.t > a.t) ? (b.t - a.t) : 0;
+}
+
+/* Butin sur une fenêtre finissant maintenant. Mesuré si l'historique le
+   permet, extrapolé du débit moyen sinon — et dit comme tel. */
+function fenetre(ms){
+  var dernier = snapDernier();
+  if (!dernier || SNAPS.length < 2) return null;
+  var tol = Math.min(ms * 0.3, 45 * 60000);
+  var depart = snapProche(dernier.t - ms, tol);
+  if (depart && depart.t < dernier.t){
+    var e = ecart(depart, dernier);
+    return {mesure: true, total: e.total, parFerme: e.parFerme,
+            duree: dernier.t - depart.t, remises: e.remises};
+  }
+  var global = ecart(snapPremier(), dernier);
+  var cov = couverture();
+  if (!cov) return null;
+  var facteur = ms / cov, parFerme = {};
+  for (var k in global.parFerme) parFerme[k] = global.parFerme[k] * facteur;
+  return {mesure: false, total: global.total * facteur, parFerme: parFerme,
+          duree: cov, remises: global.remises};
+}
+
+function debitHoraire(){
+  var cov = couverture();
+  if (!cov) return null;
+  var e = ecart(snapPremier(), snapDernier());
+  return {parHeure: e.total / (cov / H), parFerme: e.parFerme, duree: cov, remises: e.remises};
+}
+
+/* ---------- synchronisation ---------- */
+/* Le module Firebase est charge a part (script type=module, donc differe).
+   Tant qu'il n'est pas la, tout fonctionne en local et on le dit. */
+var enAttente = [];
+function dbPush(snap){
+  if (window.RazziaDB && window.RazziaDB.push){
+    window.RazziaDB.push(snap).catch(function(){ enAttente.push(snap); majSync("ko", "Enregistrement refuse — conserve en local"); });
+  } else {
+    enAttente.push(snap);
+  }
+}
+function viderAttente(){
+  if (!window.RazziaDB || !window.RazziaDB.push || !enAttente.length) return;
+  var lot = enAttente.slice(); enAttente = [];
+  lot.forEach(function(sn){ window.RazziaDB.push(sn).catch(function(){ enAttente.push(sn); }); });
+}
+function majSync(etat, txt){
+  var el = $("sync");
+  if (!el) return;
+  el.className = "sync" + (etat ? " " + etat : "");
+  $("syncTxt").textContent = txt;
+}
+
+function dureeTexte(ms){
+  if (!ms) return "0 min";
+  var mn = Math.round(ms / 60000);
+  if (mn < 60) return mn + " min";
+  var h = Math.floor(mn / 60), r = mn % 60;
+  return h + " h" + (r ? " " + (r < 10 ? "0" : "") + r : "");
+}
+
+/* ---------- rendu du rendement ---------- */
+function nomDe(cle){
+  for (var i = SNAPS.length - 1; i >= 0; i--){
+    var e = SNAPS[i].f[cle];
+    if (e && e.n) return e.n;
+  }
+  return cle;
+}
+function val(x, estime){
+  if (x === null || x === undefined || isNaN(x)) return "—";
+  var t = fmt(Math.round(x));
+  return estime ? '<span class="est">' + t + '</span>' : t;
+}
+
+function renderYield(){
+  var dernier = snapDernier(), debit = debitHoraire();
+  var f1 = fenetre(H), f12 = fenetre(12 * H), f24 = fenetre(24 * H);
+  var cov = couverture();
+
+  $("yRate").innerHTML = debit ? fmt(Math.round(debit.parHeure)) : "—";
+  $("yRateSub").textContent = debit
+    ? "mesure sur " + dureeTexte(debit.duree) + ", " + SNAPS.length + " relevés"
+    : (SNAPS.length === 1 ? "un seul relevé — il en faut deux" : "aucun relevé");
+  [["y1", f1, H], ["y12", f12, 12 * H], ["y24", f24, 24 * H]].forEach(function(o){
+    var id = o[0], f = o[1];
+    $(id).innerHTML = f ? val(f.total, !f.mesure) : "—";
+    $(id + "Sub").textContent = f ? (f.mesure ? "mesuré sur " + dureeTexte(f.duree) : "extrapolé du débit moyen") : " ";
+  });
+
+  var box = $("cov");
+  if (!SNAPS.length){
+    box.hidden = false; box.className = "status warn";
+    $("covTxt").textContent = "Aucun relevé. Colle ta liste de pillage ci-dessous pour poser le premier jalon ; le second, plus tard, donnera le premier chiffre.";
+  } else if (SNAPS.length === 1){
+    box.hidden = false; box.className = "status warn";
+    $("covTxt").textContent = "Un seul relevé. Reviens coller la page dans un moment : c’est l’écart entre deux relevés qui produit un butin.";
+  } else if (cov < 24 * H){
+    box.hidden = false; box.className = "status warn";
+    $("covTxt").textContent = "Couverture réelle : " + dureeTexte(cov) + " sur " + SNAPS.length
+      + " relevés. Les fenêtres plus longues que ça sont extrapolées du débit moyen et marquées d’un tilde.";
+  } else {
+    box.hidden = false; box.className = "status good";
+    $("covTxt").textContent = "Couverture réelle : " + dureeTexte(cov) + " sur " + SNAPS.length
+      + " relevés. Les trois fenêtres sont mesurées.";
+  }
+
+  var tb = $("yBody");
+  if (!dernier){
+    tb.innerHTML = '<tr><td colspan="8" class="empty">Pas encore de relevé.</td></tr>';
+    $("yFoot").innerHTML = "";
+    return;
+  }
+  var cles = Object.keys(dernier.f);
+  cles.sort(function(a, b){
+    var da = (debit && debit.parFerme[b] || 0) - (debit && debit.parFerme[a] || 0);
+    return da || a.localeCompare(b);
+  });
+  var h = "", tot = {r:0, a:0, b:0, c:0};
+  cles.forEach(function(k){
+    var e = dernier.f[k];
+    var r = debit && debit.parFerme[k] !== undefined ? debit.parFerme[k] / (debit.duree / H) : null;
+    var a = f1 && f1.parFerme[k] !== undefined ? f1.parFerme[k] : null;
+    var b = f12 && f12.parFerme[k] !== undefined ? f12.parFerme[k] : null;
+    var c = f24 && f24.parFerme[k] !== undefined ? f24.parFerme[k] : null;
+    if (r) tot.r += r; if (a) tot.a += a; if (b) tot.b += b; if (c) tot.c += c;
+    h += '<tr><td class="namecell">' + esc(nomDe(k)) + '</td>'
+      + '<td class="coord">' + esc(k) + '</td>'
+      + '<td class="out strong">' + val(r) + '</td>'
+      + '<td class="out">' + val(a, f1 && !f1.mesure) + '</td>'
+      + '<td class="out">' + val(b, f12 && !f12.mesure) + '</td>'
+      + '<td class="out">' + val(c, f24 && !f24.mesure) + '</td>'
+      + '<td class="out">' + (e.h ? esc(e.h) : "—") + '</td>'
+      + '<td class="out total">' + fmt(e.c) + '</td></tr>';
+  });
+  tb.innerHTML = h;
+  $("yFoot").innerHTML = '<tr><td colspan="2">' + cles.length + ' ferme' + (cles.length > 1 ? 's' : '') + '</td>'
+    + '<td class="out total">' + val(tot.r) + '</td>'
+    + '<td class="out total">' + val(tot.a, f1 && !f1.mesure) + '</td>'
+    + '<td class="out total">' + val(tot.b, f12 && !f12.mesure) + '</td>'
+    + '<td class="out total">' + val(tot.c, f24 && !f24.mesure) + '</td>'
+    + '<td colspan="2"></td></tr>';
+
+  var liste = SNAPS.slice().reverse().slice(0, 40).map(function(sn){
+    var d = new Date(sn.t);
+    var hh = function(n){ return (n < 10 ? "0" : "") + n; };
+    return '<li>' + hh(d.getDate()) + "/" + hh(d.getMonth() + 1) + " " + hh(d.getHours()) + ":" + hh(d.getMinutes())
+      + (sn.st ? ' <span style="color:var(--ink-3)">(serveur ' + esc(sn.st) + ')</span>' : '')
+      + ' · ' + Object.keys(sn.f).length + ' fermes</li>';
+  }).join("");
+  $("ySnaps").innerHTML = liste
+    ? '<ul class="snaplist">' + liste + '</ul>'
+    : '<p class="note">Aucun relevé enregistré.</p>';
 }
 
 /* ---------- formulaire ---------- */
@@ -1037,13 +1400,122 @@ function bind(){
   $("pDistCol").addEventListener("change", function(){ if ($("paste").value.trim()) doParse(false, true); });
   $("pTroops").addEventListener("change", function(){ if ($("paste").value.trim()) doParse(false, true); });
   $("pDiag").addEventListener("change", function(){ if ($("paste").value.trim()) doParse(false, true); });
+
+  /* ---- onglets ---- */
+  function onglet(nom){
+    var plan = nom === "plan";
+    $("tab-plan").hidden = !plan;
+    $("tab-yield").hidden = plan;
+    $("tab-plan-btn").setAttribute("aria-selected", plan ? "true" : "false");
+    $("tab-yield-btn").setAttribute("aria-selected", plan ? "false" : "true");
+    try{ localStorage.setItem("plan-razzia-tab", nom); }catch(e){}
+    if (!plan) renderYield();
+  }
+  $("tab-plan-btn").addEventListener("click", function(){ onglet("plan"); });
+  $("tab-yield-btn").addEventListener("click", function(){ onglet("yield"); });
+  var dernierOnglet = "plan";
+  try{ dernierOnglet = localStorage.getItem("plan-razzia-tab") || "plan"; }catch(e){}
+  onglet(dernierOnglet === "yield" ? "yield" : "plan");
+
+  /* ---- relevés de rendement ---- */
+  $("ySave").addEventListener("click", function(){
+    var txt = $("yPaste").value, msg = $("yMsg");
+    if (!txt.trim()){ msg.className = "parse-msg ko"; msg.textContent = "Le cadre est vide."; return; }
+    var res = parseFarmList(txt, false, -1);
+    var avecCumul = res.releve.filter(function(r){ return r.cumul !== null; });
+    if (!avecCumul.length){
+      msg.className = "parse-msg ko";
+      msg.textContent = res.releve.length
+        ? res.releve.length + " fermes lues, mais aucune ne porte de butin cumulé. Vérifie que la colonne « Dernier pillage » est bien dans le collage."
+        : "Aucune ferme reconnue. Il faut un nom, des coordonnées et une distance par ferme.";
+      return;
+    }
+    var hs = findServerTime(txt);
+    var precedent = snapDernier();
+    var snap = snapAdd(res.releve, hs);
+    var txtMsg = avecCumul.length + " ferme" + (avecCumul.length > 1 ? "s" : "") + " enregistrée"
+      + (avecCumul.length > 1 ? "s" : "") + (hs ? " à " + hs.txt + " (heure serveur)" : " (heure du serveur introuvable, horloge du poste utilisée)") + ".";
+    if (precedent){
+      var e = ecart(precedent, snap);
+      txtMsg += " Depuis le relevé précédent (" + dureeTexte(snap.t - precedent.t) + ") : "
+        + fmt(e.total) + " de butin."
+        + (e.remises ? " " + e.remises + " ferme(s) à cumul en baisse, écartée(s)." : "");
+    } else {
+      txtMsg += " Premier jalon posé — reviens coller la page plus tard pour obtenir un butin.";
+    }
+    msg.className = "parse-msg ok"; msg.textContent = txtMsg;
+    $("yPaste").value = "";
+    renderYield();
+  });
+  $("yClear").addEventListener("click", function(){
+    $("yPaste").value = ""; $("yMsg").textContent = ""; $("yMsg").className = "parse-msg";
+  });
+  $("yForget").addEventListener("click", function(){
+    if (!SNAPS.length) return;
+    SNAPS = []; snapsSave(); renderYield();
+    $("yMsg").className = "parse-msg";
+    $("yMsg").textContent = "Historique local effacé. Les relevés déjà synchronisés reviendront à la prochaine connexion.";
+  });
+
+  /* ---- retours du module de synchronisation ---- */
+  window.addEventListener("razzia-ready", function(){
+    majSync("live", "Synchronisé");
+    viderAttente();
+  });
+  window.addEventListener("razzia-remote", function(e){
+    majSync("live", "Synchronisé");
+    if (snapsMerge(e.detail)) renderYield();
+    viderAttente();
+  });
+  window.addEventListener("razzia-error", function(e){
+    majSync("ko", "Hors ligne — historique local seulement");
+  });
 }
 
 load();
+snapsLoad();
 bind();
 render();
 
 })();
+</script>
+
+<!-- Synchronisation Firebase, dans son propre module.
+     Un module est differe : le script principal tourne avant lui, ce qui
+     garantit que ses ecouteurs d'evenements sont en place. L'application
+     fonctionne sans, en local, si la base est injoignable. -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyD5FmyvC59GASwzwlcHr3_bXUp7bo0WDpE",
+  authDomain: "travian---planning.firebaseapp.com",
+  databaseURL: "https://travian---planning-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "travian---planning",
+  storageBucket: "travian---planning.firebasestorage.app",
+  messagingSenderId: "38733295968",
+  appId: "1:38733295968:web:fb85e28d04b5a3ab532e05"
+};
+
+try {
+  const db = getDatabase(initializeApp(firebaseConfig));
+  const RELEVES = "razzia/releves";
+
+  window.RazziaDB = {
+    push(snap){
+      return set(ref(db, RELEVES + "/" + snap.t), { st: snap.st || null, f: snap.f });
+    }
+  };
+  window.dispatchEvent(new CustomEvent("razzia-ready"));
+
+  onValue(ref(db, RELEVES),
+    snap => window.dispatchEvent(new CustomEvent("razzia-remote", { detail: snap.val() || {} })),
+    err  => window.dispatchEvent(new CustomEvent("razzia-error", { detail: (err && err.message) || String(err) }))
+  );
+} catch (err) {
+  window.dispatchEvent(new CustomEvent("razzia-error", { detail: String(err) }));
+}
 </script>
 </body>
 </html>
