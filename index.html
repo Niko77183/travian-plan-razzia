@@ -1,0 +1,1049 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Calculateur de troupes de pillage pour Travian : colle ta liste de pillage, obtiens le nombre de groupes en rotation et de troupes par cible.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2300805A'/%3E%3Cpath d='M9 22 L23 8 M19 8 h4 v4 M9 10 l4 4' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
+<style>
+  :root{ color-scheme: light dark;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px); }
+  html,body{ margin:0 }
+  img{ max-width:100% }
+  [hidden]{ display:none !important }
+</style>
+<title>Plan de Razzia</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#E9ECE4; --surface:#F8FAF5; --surface-2:#DFE4D6; --sunk:#EFF2EA;
+  --ink:#171B12; --ink-2:#565F4C; --ink-3:#818A76;
+  --line:#CBD2BE; --line-2:#B2BBA1;
+  --accent:#00805A; --accent-ink:#005B40; --accent-soft:#D6EBE1; --on-accent:#FFFFFF;
+  --warn:#B27510; --warn-soft:#F3E4C4;
+  --crit:#B03626; --crit-soft:#F5DAD5;
+  --shadow:0 1px 2px rgba(23,27,18,.06), 0 8px 24px -16px rgba(23,27,18,.28);
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#111410; --surface:#181C15; --surface-2:#232819; --sunk:#14180F;
+    --ink:#E8EDE0; --ink-2:#9CA68E; --ink-3:#78826A;
+    --line:#2F3627; --line-2:#414A35;
+    --accent:#34B98A; --accent-ink:#5FD3A6; --accent-soft:#12301F; --on-accent:#0B1710;
+    --warn:#D9971F; --warn-soft:#33260F;
+    --crit:#E5695B; --crit-soft:#3A1C17;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#111410; --surface:#181C15; --surface-2:#232819; --sunk:#14180F;
+  --ink:#E8EDE0; --ink-2:#9CA68E; --ink-3:#78826A;
+  --line:#2F3627; --line-2:#414A35;
+  --accent:#34B98A; --accent-ink:#5FD3A6; --accent-soft:#12301F; --on-accent:#0B1710;
+  --warn:#D9971F; --warn-soft:#33260F;
+  --crit:#E5695B; --crit-soft:#3A1C17;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+}
+
+*{box-sizing:border-box}
+body{margin:0; background:var(--paper); color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif; font-size:14px; line-height:1.5;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px; margin:0 auto; padding-inline:16px; padding-block:22px 48px}
+h1,h2{font-family:"Zilla Slab","Iowan Old Style",Georgia,serif; margin:0; text-wrap:balance; font-weight:700; letter-spacing:-.01em}
+h1{font-size:clamp(28px,5vw,38px); line-height:1.05}
+h2{font-size:18px}
+.eyebrow{font-size:11px; letter-spacing:.14em; text-transform:uppercase; font-weight:600; color:var(--accent-ink); margin:0 0 8px}
+.lede{color:var(--ink-2); max-width:64ch; margin:10px 0 0}
+header.top{border-bottom:1px solid var(--line); padding-bottom:20px; margin-bottom:22px}
+
+.layout{display:grid; gap:18px; align-items:start}
+@media (min-width:1000px){ .layout{grid-template-columns:300px minmax(0,1fr)} }
+.panel{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:16px; box-shadow:var(--shadow)}
+.panel .hint{color:var(--ink-3); font-size:12px; margin:3px 0 14px}
+aside.panel{position:sticky; top:calc(env(safe-area-inset-top, 0px) + 12px)}
+@media (max-width:999px){ aside.panel{position:static} }
+.stack{display:flex; flex-direction:column; gap:18px; min-width:0}
+
+.grp{border-top:1px solid var(--line); margin-top:16px; padding-top:14px}
+.grp:first-of-type{border-top:0; margin-top:0; padding-top:0}
+.grp-t{font-size:11px; letter-spacing:.12em; text-transform:uppercase; font-weight:600; color:var(--ink-3); margin-bottom:10px; display:block}
+.f{display:flex; flex-direction:column; gap:4px; margin-bottom:10px; min-width:0}
+.f > label{font-size:12px; font-weight:500; color:var(--ink-2)}
+.row2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+.row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px}
+
+input,select,textarea,button{font:inherit; color:inherit}
+input[type=number],input[type=text],select{width:100%; background:var(--sunk); border:1px solid var(--line-2);
+  border-radius:7px; padding:7px 9px; min-width:0}
+input[type=number]{font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
+textarea{width:100%; background:var(--sunk); border:1px solid var(--line-2); border-radius:8px; padding:10px 12px;
+  font-family:"IBM Plex Mono",monospace; font-size:12.5px; line-height:1.55; resize:vertical; min-height:120px}
+.switch{display:flex; align-items:flex-start; gap:9px; margin-bottom:10px; cursor:pointer}
+.switch input{margin:2px 0 0; accent-color:var(--accent); width:15px; height:15px; flex:none}
+.switch span{font-size:12.5px; color:var(--ink-2)}
+button{background:var(--accent); color:var(--on-accent); border:1px solid transparent; border-radius:7px;
+  padding:8px 14px; font-weight:600; font-size:13px; cursor:pointer}
+button:hover{filter:brightness(1.08)}
+button.ghost{background:transparent; color:var(--ink-2); border-color:var(--line-2)}
+button.ghost:hover{background:var(--surface-2); filter:none; color:var(--ink)}
+.btns{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+.note{font-size:12px; color:var(--ink-3); margin:10px 0 0}
+.note code{background:var(--sunk); border:1px solid var(--line); padding:1px 5px; border-radius:4px;
+  font-size:11.5px; font-family:"IBM Plex Mono",monospace}
+
+.tiles{display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.tile{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:14px 15px;
+  display:flex; flex-direction:column; gap:3px; box-shadow:var(--shadow)}
+.tile.lead{background:var(--accent-soft); border-color:var(--accent)}
+.tile .k{font-size:11px; letter-spacing:.09em; text-transform:uppercase; font-weight:600; color:var(--ink-3)}
+.tile.lead .k{color:var(--accent-ink)}
+.tile .v{font-family:"Zilla Slab",Georgia,serif; font-size:clamp(26px,4vw,34px); font-weight:700; line-height:1.05;
+  font-variant-numeric:tabular-nums}
+.tile.lead .v{color:var(--accent-ink)}
+.tile .s{font-size:12px; color:var(--ink-3)}
+
+.tscroll{overflow-x:auto; border:1px solid var(--line); border-radius:var(--r); background:var(--surface)}
+table{border-collapse:collapse; width:100%; min-width:760px}
+th,td{padding:0; text-align:left; border-bottom:1px solid var(--line); vertical-align:middle}
+thead th{font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; font-weight:600; color:var(--ink-3);
+  padding:9px 8px; background:var(--surface-2); white-space:nowrap; border-bottom:1px solid var(--line-2)}
+thead th.r{text-align:right}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--sunk)}
+td{padding:2px 4px}
+td input{background:transparent; border:1px solid transparent; border-radius:5px; padding:6px}
+td input:hover{border-color:var(--line)}
+td input:focus{background:var(--sunk); border-color:var(--line-2)}
+td input.mini{text-align:right}
+.out{padding:8px; font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums; text-align:right;
+  color:var(--ink-2); white-space:nowrap}
+.out.strong{color:var(--ink); font-weight:500}
+.out.total{font-weight:600; color:var(--accent-ink)}
+.namecell{min-width:200px; padding:6px 8px}
+.namecell input{width:100%; font-weight:500}
+.coord{font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--ink-3); white-space:nowrap; padding:8px}
+.wv{display:inline-flex; min-width:26px; justify-content:center; padding:2px 7px; border-radius:20px;
+  background:var(--accent-soft); color:var(--accent-ink); font-weight:600; font-size:12px; font-family:"IBM Plex Mono",monospace}
+.wv.hot{background:var(--warn-soft); color:var(--warn)}
+.delcell{padding:4px 6px; width:42px}
+.del{background:var(--sunk); border:1px solid var(--line-2); color:var(--ink-3); width:26px; height:26px;
+  padding:0; font-size:16px; line-height:1; cursor:pointer; border-radius:6px;
+  display:inline-flex; align-items:center; justify-content:center}
+.del:hover{background:var(--crit); border-color:var(--crit); color:#fff; filter:none}
+#undoBar{margin-top:12px}
+#undoBar button{margin-left:auto; padding:4px 11px; font-size:12px}
+tfoot td{background:var(--surface-2); border-top:1px solid var(--line-2); border-bottom:0; padding:9px 8px; font-weight:600}
+.empty{padding:30px 16px; text-align:center; color:var(--ink-3)}
+
+.status{display:flex; align-items:center; gap:9px; padding:10px 12px; border-radius:8px; font-size:13px; border:1px solid}
+.status .dot{width:9px; height:9px; border-radius:50%; flex:none}
+.status.good{background:var(--accent-soft); border-color:var(--accent); color:var(--accent-ink)}
+.status.good .dot{background:var(--accent)}
+.status.warn{background:var(--warn-soft); border-color:var(--warn); color:var(--warn)}
+.status.warn .dot{background:var(--warn)}
+.status.crit{background:var(--crit-soft); border-color:var(--crit); color:var(--crit)}
+.status.crit .dot{background:var(--crit)}
+
+.chartbox{overflow-x:auto}
+.chartbox svg{display:block; min-width:540px; width:100%; height:auto}
+.lane-lbl{font-family:"IBM Plex Sans",sans-serif; font-size:11.5px; fill:var(--ink-2)}
+.ax-lbl{font-family:"IBM Plex Mono",monospace; font-size:10.5px; fill:var(--ink-3)}
+.grid-l,.lane-rail{stroke:var(--line); stroke-width:1}
+.dep{fill:var(--accent); stroke:var(--surface); stroke-width:2}
+.dep:hover{r:6.5}
+
+.preview{margin-top:10px; border:1px solid var(--line); border-radius:8px; background:var(--sunk); padding:9px 12px;
+  max-height:260px; overflow:auto}
+.preview ol,.preview ul{margin:0; padding-left:22px; display:flex; flex-direction:column; gap:3px}
+.preview li{font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--ink-3); font-variant-numeric:tabular-nums}
+.preview li b{color:var(--ink); font-weight:500; font-family:"IBM Plex Sans",sans-serif}
+.preview details{margin-top:9px; padding-top:8px; border-top:1px solid var(--line)}
+.preview summary{font-size:12px}
+.diag{width:100%; border-collapse:collapse; margin-top:8px; font-size:11px}
+.diag th{font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-3); text-align:left;
+  padding:4px 6px; border-bottom:1px solid var(--line-2); background:var(--surface-2)}
+.diag td{padding:3px 6px; border-bottom:1px solid var(--line); vertical-align:top; font-family:"IBM Plex Mono",monospace}
+.diag td.raw{white-space:pre-wrap; word-break:break-all; color:var(--ink)}
+.diag td.act{white-space:nowrap; color:var(--ink-3)}
+.diag tr.new td.act{color:var(--accent-ink); font-weight:600}
+.diag tr.skip td{color:var(--ink-3); opacity:.7}
+.diag .inv{color:var(--warn); opacity:.85}
+.parse-msg{font-size:12.5px; margin-top:10px; min-height:18px; color:var(--ink-3)}
+.parse-msg.ok{color:var(--accent-ink)}
+.parse-msg.ko{color:var(--crit)}
+details.meth{margin-top:14px; border-top:1px solid var(--line); padding-top:12px}
+details.meth summary{cursor:pointer; font-size:12.5px; font-weight:600; color:var(--ink-2)}
+details.meth ul{padding-left:18px; margin:10px 0 0; color:var(--ink-2); font-size:12.5px;
+  display:flex; flex-direction:column; gap:6px}
+@media (prefers-reduced-motion:reduce){ *{transition:none!important; animation:none!important} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <p class="eyebrow">Travian &middot; logistique de pillage</p>
+  <h1>Plan de Razzia</h1>
+  <p class="lede">Chaque ferme a sa propre dur&eacute;e d&rsquo;aller-retour. Pour la frapper toutes les <em>X</em> minutes,
+  il faut autant de groupes de troupes en rotation que le cycle contient d&rsquo;intervalles.
+  Colle ta liste de pillage, l&rsquo;outil en d&eacute;duit les groupes, les troupes et l&rsquo;heure de chaque d&eacute;part.</p>
+</header>
+
+<div class="layout">
+
+  <aside class="panel">
+    <h2>R&eacute;glages</h2>
+    <p class="hint">Trois nombres suffisent : la vitesse, le d&eacute;lai, la taille d&rsquo;une vague.</p>
+
+    <div class="grp">
+      <span class="grp-t">Vitesse</span>
+      <div class="row2">
+        <div class="f"><label for="speed">Vitesse effective<br>cases/h</label><input type="number" id="speed" min="0.1" step="0.5"></div>
+        <div class="f"><label for="ts">Place de tournoi</label><select id="ts"></select></div>
+      </div>
+      <p class="note">La place de tournoi n&rsquo;acc&eacute;l&egrave;re que la distance au-del&agrave; de 20 cases.</p>
+      <details style="margin-top:10px">
+        <summary style="font-size:12px; color:var(--ink-2); cursor:pointer; font-weight:600">D&rsquo;o&ugrave; vient ce chiffre&nbsp;?</summary>
+        <div class="f" style="margin-top:10px"><label for="preset">Depuis une unit&eacute; (indicatif)</label>
+          <select id="preset"></select></div>
+        <div class="f"><label for="serverSpeed">&times; vitesse du serveur</label>
+          <select id="serverSpeed">
+            <option value="1">&times;1 (normal)</option><option value="2">&times;2</option>
+            <option value="3">&times;3</option><option value="5">&times;5</option><option value="10">&times;10</option>
+          </select></div>
+        <label class="switch" for="calib" style="margin-top:6px">
+          <input type="checkbox" id="calib">
+          <span>Plut&ocirc;t caler sur un trajet r&eacute;el &mdash; plus fiable que la table d&rsquo;unit&eacute;s</span>
+        </label>
+        <div id="calibBox" hidden>
+          <div class="f"><label for="calibDist">Distance du trajet t&eacute;moin (cases)</label>
+            <input type="number" id="calibDist" min="0.1" step="0.1"></div>
+          <div class="row3">
+            <div class="f"><label for="calibH">h</label><input type="number" id="calibH" min="0" step="1"></div>
+            <div class="f"><label for="calibM">min</label><input type="number" id="calibM" min="0" max="59" step="1"></div>
+            <div class="f"><label for="calibS">s</label><input type="number" id="calibS" min="0" max="59" step="1"></div>
+          </div>
+          <p class="note" id="calibOut"></p>
+        </div>
+      </details>
+    </div>
+
+    <div class="grp">
+      <span class="grp-t">Rythme</span>
+      <div class="row2">
+        <div class="f"><label for="interval">D&eacute;lai entre attaques (min)</label><input type="number" id="interval" min="0.5" step="0.5"></div>
+        <div class="f"><label for="buffer">Marge au retour (s)</label><input type="number" id="buffer" min="0" step="5"></div>
+      </div>
+      <div class="f"><label for="wave">Troupes par vague</label><input type="number" id="wave" min="1" step="1"></div>
+      <p class="note">La marge couvre le temps de relancer le raid une fois les troupes rentr&eacute;es.</p>
+    </div>
+
+    <div class="grp">
+      <span class="grp-t">Contr&ocirc;le</span>
+      <div class="f"><label for="available">Troupes de pillage disponibles</label><input type="number" id="available" min="0" step="1"></div>
+      <div class="btns"><button type="button" class="ghost" id="reset">R&eacute;initialiser</button></div>
+    </div>
+  </aside>
+
+  <div class="stack">
+
+    <div class="tiles">
+      <div class="tile lead"><span class="k">Troupes n&eacute;cessaires</span><span class="v" id="tTroops">&mdash;</span><span class="s" id="tTroopsSub">&nbsp;</span></div>
+      <div class="tile"><span class="k">Groupes en rotation</span><span class="v" id="tWaves">&mdash;</span><span class="s" id="tWavesSub">&nbsp;</span></div>
+      <div class="tile"><span class="k">D&eacute;parts par heure</span><span class="v" id="tDep">&mdash;</span><span class="s" id="tDepSub">&nbsp;</span></div>
+    </div>
+
+    <div id="feas" class="status good" hidden><span class="dot"></span><span id="feasTxt"></span></div>
+
+    <section class="panel">
+      <h2>Coller la liste de pillage</h2>
+      <p class="hint">S&eacute;lectionne la page du point de ralliement et colle-la enti&egrave;re. Une cible est retenue si elle a un nom, des coordonn&eacute;es et une distance &mdash; le reste de la page est &eacute;cart&eacute;.</p>
+      <textarea id="paste" spellcheck="false" placeholder="Oasis inoccupée (17|−62)	0	2.2	1"></textarea>
+      <div class="btns" style="margin-top:10px">
+        <button type="button" id="parseReplace">Remplacer la liste</button>
+        <button type="button" class="ghost" id="parseAdd">Ajouter &agrave; la liste</button>
+        <button type="button" class="ghost" id="clearPaste">Vider</button>
+      </div>
+      <p class="parse-msg" id="parseMsg"></p>
+      <div class="preview" id="parsePreview" hidden></div>
+      <div class="row2" style="margin-top:12px">
+        <div class="f"><label for="pDistCol">Quel nombre est la distance</label>
+          <select id="pDistCol">
+            <option value="-1">D&eacute;tection automatique</option>
+            <option value="0">1<sup>er</sup> nombre</option><option value="1">2<sup>e</sup> nombre</option>
+            <option value="2">3<sup>e</sup> nombre</option><option value="3">4<sup>e</sup> nombre</option>
+            <option value="4">5<sup>e</sup> nombre</option><option value="5">6<sup>e</sup> nombre</option>
+          </select></div>
+        <div class="f"><label for="pTroops">Colonne troupes</label>
+          <select id="pTroops">
+            <option value="0">Ignorer &mdash; j&rsquo;impose ma taille de vague</option>
+            <option value="1">Reprendre comme taille de vague</option>
+          </select></div>
+      </div>
+      <label class="switch" for="pDiag" style="margin-bottom:0">
+        <input type="checkbox" id="pDiag">
+        <span>Diagnostic ligne par ligne, si le r&eacute;sultat para&icirc;t faux</span>
+      </label>
+    </section>
+
+    <section class="panel">
+      <h2>Cibles</h2>
+      <p class="hint">Un champ vide reprend la valeur globale.</p>
+      <div class="tscroll">
+        <table>
+          <thead><tr>
+            <th style="width:42px"></th><th>Cible</th><th>Coord.</th><th class="r">Cases</th><th class="r">Aller</th>
+            <th class="r">Aller/retour</th><th class="r">D&eacute;lai</th><th class="r">Tr./vague</th>
+            <th class="r">Groupes</th><th class="r">Troupes</th>
+          </tr></thead>
+          <tbody id="tbody"></tbody>
+          <tfoot id="tfoot"></tfoot>
+        </table>
+      </div>
+      <div id="undoBar" class="status warn" hidden>
+        <span class="dot"></span><span id="undoTxt"></span>
+        <button type="button" class="ghost" id="undoBtn">Annuler</button>
+      </div>
+      <div class="btns" style="margin-top:12px">
+        <button type="button" class="ghost" id="addRow">Ajouter une cible</button>
+        <button type="button" class="ghost" id="clearRows">Tout effacer</button>
+      </div>
+      <details class="meth">
+        <summary>Comment le total est obtenu</summary>
+        <ul>
+          <li><strong>Aller</strong> &mdash; les 20 premi&egrave;res cases &agrave; la vitesse effective, le reste acc&eacute;l&eacute;r&eacute; de 20&nbsp;% par niveau de place de tournoi.</li>
+          <li><strong>Aller/retour</strong> &mdash; deux fois l&rsquo;aller, plus la marge de relance.</li>
+          <li><strong>Groupes</strong> &mdash; &lceil;aller-retour &divide; d&eacute;lai&rceil; : le nombre de paquets qui tournent en parall&egrave;le sur la cible.</li>
+          <li><strong>Troupes</strong> &mdash; groupes &times; troupes par vague, additionn&eacute; sur toutes les cibles.</li>
+        </ul>
+      </details>
+    </section>
+
+    <section class="panel">
+      <h2>Plan de d&eacute;parts</h2>
+      <p class="hint">Une heure de tourn&eacute;e. Chaque point est un envoi &agrave; lancer ; les d&eacute;parts sont d&eacute;cal&eacute;s d&rsquo;une cible &agrave; l&rsquo;autre pour &eacute;taler les clics.</p>
+      <div class="chartbox" id="chartbox"></div>
+      <p class="note" id="chartNote"></p>
+    </section>
+
+  </div>
+</div>
+</div>
+<script>
+(function(){
+"use strict";
+
+var STORE = "plan-razzia-v2";
+
+/* vitesses de base indicatives, en cases/h sur un serveur x1 */
+var PRESETS = [
+  ["Gaulois — Cavalier du Tonnerre", 19],
+  ["Gaulois — Druide-cavalier", 16],
+  ["Gaulois — Haeduan", 13],
+  ["Gaulois — Phalange", 7],
+  ["Gaulois — Combattant à l'épée", 6],
+  ["Romains — Equites Imperatoris", 14],
+  ["Romains — Equites Caesaris", 10],
+  ["Romains — Imperian", 7],
+  ["Romains — Légionnaire", 6],
+  ["Teutons — Paladin", 10],
+  ["Teutons — Cavalier teuton", 9],
+  ["Teutons — Combattant à la massue", 7],
+  ["Égyptiens — Anhur", 14],
+  ["Égyptiens — Reshef", 10],
+  ["Huns — Cavalier des steppes", 16],
+  ["Huns — Maraudeur", 14],
+  ["Huns — Logades", 10]
+];
+
+var DEF = {
+  speed:19, serverSpeed:1, ts:0,
+  calib:false, calibDist:20, calibH:1, calibM:3, calibS:9,
+  interval:10, buffer:30, wave:10, available:0
+};
+
+/* exemple de depart : une liste de pillage reelle */
+var SAMPLE = [
+  {name:"Oasis inoccupée", x:17,  y:-62, dist:2.2},
+  {name:"Oasis inoccupée", x:19,  y:-67, dist:4},
+  {name:"Oasis inoccupée", x:19,  y:-59, dist:4},
+  {name:"Oasis inoccupée", x:23,  y:-66, dist:5},
+  {name:"Oasis inoccupée", x:18,  y:-68, dist:5.1},
+  {name:"Oasis inoccupée", x:21,  y:-70, dist:7.3},
+  {name:"Oasis inoccupée", x:27,  y:-62, dist:8.1},
+  {name:"Oasis inoccupée", x:11,  y:-65, dist:8.2}
+];
+
+var cfg, targets, uid = 1;
+
+function blank(o){
+  return {
+    id: uid++,
+    name: o.name || "",
+    x: (o.x === undefined ? null : o.x),
+    y: (o.y === undefined ? null : o.y),
+    dist: (o.dist === undefined ? null : o.dist),
+    interval: (o.interval === undefined ? null : o.interval),
+    wave: (o.wave === undefined ? null : o.wave)
+  };
+}
+function load(){
+  cfg = {}; for (var k in DEF) cfg[k] = DEF[k];
+  targets = null;
+  try{
+    var raw = localStorage.getItem(STORE);
+    if (raw){
+      var d = JSON.parse(raw);
+      if (d && d.cfg) for (var k2 in DEF) if (d.cfg[k2] !== undefined) cfg[k2] = d.cfg[k2];
+      if (d && Array.isArray(d.targets)) targets = d.targets.map(blank);
+    }
+  }catch(e){}
+  if (!targets || !targets.length) targets = SAMPLE.map(blank);
+}
+function save(){
+  try{ localStorage.setItem(STORE, JSON.stringify({cfg:cfg, targets:targets})); }catch(e){}
+}
+
+/* ---------- le lecteur ---------- */
+var DASH = "\\u2212\\u2012\\u2013\\u2014\\u2010-";
+var COORD_RE = new RegExp("\\(?\\s*([" + DASH + "]?\\s*\\d{1,3})\\s*[|\\uFF5C]\\s*([" + DASH + "]?\\s*\\d{1,3})\\s*\\)?", "g");
+
+function toInt(s){
+  var v = String(s).replace(new RegExp("[" + DASH + "]", "g"), "-").replace(/\s+/g, "");
+  return parseInt(v, 10);
+}
+function cleanName(s){
+  return s.replace(/[\s\t]+/g, " ")
+          .replace(/^[\s\-–—·*>•|:.\d)]+/, "")
+          .replace(/[\s\-–—·:|,;.]+$/, "")
+          .trim();
+}
+/* ------------------------------------------------------------------
+   Lecture d'une liste de fermes.
+
+   Une ligne n'est pas une ferme : c'est un fragment. Et les colonnes ne
+   sont pas fiables (un copier/coller peut arriver en tabulations, en
+   espaces simples, ou une cellule par ligne). On ne decoupe donc pas en
+   colonnes : on extrait de chaque fragment les coordonnees, puis les
+   nombres restants dans l'ordre, puis ce qui reste fait le nom.
+
+   Quelle place occupe la distance parmi ces nombres ? On ne le devine
+   pas ligne par ligne : on le deduit de TOUTES les lignes a la fois,
+   car la colonne est la meme partout.
+   ------------------------------------------------------------------ */
+
+var TIME_RE = /\b\d{1,2}:\d{2}(?::\d{2})?\b/g;
+var SUM_RE  = /[Σ∑]\s*[\d., ]+/g;
+var PCT_RE  = /\d+(?:[.,]\d+)?\s*%/g;
+var NUM_RE  = /\d{1,6}(?:[.,]\d{1,2})?/g;
+
+/* Travian enrobe chaque nombre et chaque coordonnee de marques bidirectionnelles
+   invisibles (LRO/PDF/LRM...). Elles ne sont pas des espaces : une expression
+   reguliere qui attend "(17" ne voit rien dans "(<LRO>17<PDF>". On les retire,
+   et on ramene les espaces fins et insecables a un espace ordinaire. */
+var INVIS_CHARS = (function(){
+  var out = "", ranges = [[0x200B,0x200F],[0x202A,0x202E],[0x2060,0x2064],[0x2066,0x2069],[0xFEFF,0xFEFF]];
+  for (var i = 0; i < ranges.length; i++)
+    for (var c = ranges[i][0]; c <= ranges[i][1]; c++) out += String.fromCharCode(c);
+  return out;
+})();
+function isInvis(code){ return INVIS_CHARS.indexOf(String.fromCharCode(code)) >= 0; }
+function stripInvis(str){
+  var out = "";
+  for (var i = 0; i < str.length; i++){
+    var code = str.charCodeAt(i);
+    if (isInvis(code)) continue;
+    if (code === 0x00A0 || code === 0x202F || code === 0x2007 || code === 0x2009){ out += " "; continue; }
+    out += str.charAt(i);
+  }
+  return out;
+}
+
+function scanLine(line){
+  var f = {name:"", x:null, y:null, nums:[]};
+  var rest = stripInvis(line);
+
+  COORD_RE.lastIndex = 0;
+  var m = COORD_RE.exec(rest);
+  if (m){
+    var x = toInt(m[1]), y = toInt(m[2]);
+    if (!isNaN(x) && !isNaN(y)){ f.x = x; f.y = y; }
+  }
+  COORD_RE.lastIndex = 0;
+  rest = rest.replace(COORD_RE, " ");
+  /* heures d'arrivee, totaux prefixes d'un sigma, pourcentages : jamais des distances */
+  rest = rest.replace(TIME_RE, " ").replace(SUM_RE, " ").replace(PCT_RE, " ");
+
+  var mm;
+  NUM_RE.lastIndex = 0;
+  while ((mm = NUM_RE.exec(rest)) !== null){
+    f.nums.push({v: parseFloat(mm[0].replace(",", ".")), dec: /[.,]/.test(mm[0])});
+  }
+
+  var nameTxt = cleanName(rest.replace(NUM_RE, " "));
+  if (/[A-Za-zÀ-ɏ]{2}/.test(nameTxt) && !/^dist/i.test(nameTxt)) f.name = nameTxt;
+  return f;
+}
+
+/* La colonne de distance est celle qui, sur l'ensemble des fermes, est
+   toujours strictement positive et plausible, et porte le plus de
+   decimales. Sur une liste ou la premiere colonne vaut 0 partout, elle
+   est ecartee d'office. */
+function inferDistCol(recs){
+  var maxLen = 0;
+  for (var i = 0; i < recs.length; i++) if (recs[i].nums.length > maxLen) maxLen = recs[i].nums.length;
+  var best = -1, bestScore = -1;
+  for (var p = 0; p < maxLen; p++){
+    var seen = 0, dec = 0, ok = true;
+    for (var r = 0; r < recs.length; r++){
+      var a = recs[r].nums;
+      if (p >= a.length) continue;
+      seen++;
+      if (!(a[p].v > 0 && a[p].v <= 500)){ ok = false; break; }
+      if (a[p].dec) dec++;
+    }
+    if (!ok || !seen) continue;
+    var score = dec * 1000 + seen;
+    if (score > bestScore){ bestScore = score; best = p; }
+  }
+  return best;
+}
+
+function parseFarmList(text, useTroops, forcedCol){
+  var lines = text.split(/\r?\n/);
+  var recs = [], cur = null, coordCount = 0;
+
+  function fresh(){ return {name:"", x:null, y:null, nums:[]}; }
+  function flush(){
+    if (cur && (cur.name || cur.x !== null || cur.nums.length)) recs.push(cur);
+    cur = null;
+  }
+
+  var trace = [];
+  for (var i = 0; i < lines.length; i++){
+    if (!lines[i].trim()) continue;
+    var f = scanLine(lines[i]);
+    var tr = {i: i + 1, raw: lines[i], name: f.name, x: f.x, y: f.y,
+              nums: f.nums.map(function(o){ return o.v; }), act: ""};
+    if (!f.name && f.x === null && !f.nums.length){
+      tr.act = "ignoree"; trace.push(tr); continue;
+    }
+    if (f.x !== null) coordCount++;
+    /* un nouveau nom ouvre toujours une nouvelle ferme */
+    var opened = false;
+    if (f.name && cur && cur.name){ flush(); }
+    else if (cur && f.x !== null && cur.x !== null){ flush(); }
+    if (!cur){ cur = fresh(); opened = true; }
+    if (f.name && !cur.name) cur.name = f.name;
+    if (f.x !== null && cur.x === null){ cur.x = f.x; cur.y = f.y; }
+    cur.nums = cur.nums.concat(f.nums);
+    tr.act = opened ? "nouvelle ferme" : "meme ferme";
+    trace.push(tr);
+  }
+  flush();
+
+  /* Reparation : une ferme qui a son nom et ses coordonnees mais aucun nombre,
+     suivie d'un fragment qui n'a que des nombres, c'est une seule ferme qu'une
+     ligne parasite a coupee en deux. */
+  for (var q = 0; q < recs.length - 1; q++){
+    var A = recs[q], B = recs[q + 1];
+    if (A.name && A.x !== null && !A.nums.length && B.x === null && B.nums.length){
+      A.nums = A.nums.concat(B.nums);
+      recs.splice(q + 1, 1);
+      q--;
+    }
+  }
+
+  /* Seules les fiches qui peuvent devenir des cibles votent pour la colonne :
+     le reste de la page (ressources, menus, copyright) n'a pas voix au chapitre. */
+  var candidates = recs.filter(function(r){ return r.name && r.x !== null; });
+  var col = (forcedCol !== null && forcedCol !== undefined && forcedCol >= 0)
+    ? forcedCol : inferDistCol(candidates.length ? candidates : recs);
+
+  var items = [], rejected = [], seen = {};
+  for (var r2 = 0; r2 < recs.length; r2++){
+    var rec = recs[r2];
+    var dist = null, usedIdx = -1;
+    if (col >= 0 && col < rec.nums.length && rec.nums[col].v > 0 && rec.nums[col].v <= 500){
+      dist = rec.nums[col].v; usedIdx = col;
+    }
+
+    var why = [];
+    if (!rec.name) why.push("nom");
+    if (rec.x === null) why.push("coordonnées");
+    if (dist === null) why.push("distance");
+    if (why.length){ rejected.push({label: describeRec(rec), why: why}); continue; }
+
+    var wave = null;
+    if (useTroops){
+      for (var j = usedIdx + 1; j < rec.nums.length; j++){
+        if (!rec.nums[j].dec && rec.nums[j].v > 0){ wave = rec.nums[j].v; break; }
+      }
+    }
+    var key = rec.x + "|" + rec.y;
+    if (seen[key]) continue;
+    seen[key] = 1;
+    items.push(blank({name:rec.name.slice(0,48), x:rec.x, y:rec.y, dist:dist, wave:wave}));
+  }
+
+  return {
+    items: items, rejected: rejected, col: col, trace: trace,
+    width: recs.reduce(function(a, r){ return Math.max(a, r.nums.length); }, 0),
+    coordCount: coordCount, recCount: recs.length
+  };
+}
+
+function describeRec(rec){
+  if (rec.name) return rec.name.slice(0, 40);
+  if (rec.x !== null) return "(" + rec.x + "|" + rec.y + ")";
+  var n = rec.nums.slice(0, 5).map(function(o){ return o.v; });
+  return n.length ? n.join(" ") : "fragment vide";
+}
+
+/* ---------- calcul ---------- */
+function calibSpeed(){
+  var d = cfg.calibDist;
+  var hours = (cfg.calibH * 3600 + cfg.calibM * 60 + cfg.calibS) / 3600;
+  if (!(d > 0) || !(hours > 0)) return null;
+  var equiv = (d <= 20) ? d : 20 + (d - 20) / (1 + 0.2 * cfg.ts);
+  return equiv / hours;
+}
+function effSpeed(){
+  if (cfg.calib){
+    var c = calibSpeed();
+    if (c !== null && c > 0) return c;
+  }
+  return cfg.speed * cfg.serverSpeed;
+}
+/* minutes pour un aller simple */
+function oneWay(d){
+  var v = effSpeed();
+  if (!(v > 0) || d === null || !(d > 0)) return null;
+  var h = (d <= 20) ? d / v : 20 / v + (d - 20) / (v * (1 + 0.2 * cfg.ts));
+  return h * 60;
+}
+function computeRow(t){
+  var one = oneWay(t.dist);
+  var iv = (t.interval !== null && t.interval > 0) ? t.interval : cfg.interval;
+  var r = {t:t, one:one, iv:iv, cycle:null, waves:null, wave:null, total:null};
+  if (one === null || !(iv > 0)) return r;
+  r.cycle = 2 * one + cfg.buffer / 60;
+  r.waves = Math.max(1, Math.ceil(r.cycle / iv - 1e-9));
+  r.wave  = (t.wave !== null && t.wave > 0) ? t.wave : cfg.wave;
+  r.total = r.waves * r.wave;
+  return r;
+}
+function computeAll(){ return targets.map(computeRow); }
+
+/* intervalle uniforme minimal tenable avec N troupes */
+function minInterval(avail){
+  if (!(avail > 0)) return null;
+  for (var iv = 0.5; iv <= 240; iv += 0.5){
+    var sum = 0, ok = true;
+    for (var i = 0; i < targets.length; i++){
+      var t = targets[i], one = oneWay(t.dist);
+      if (one === null) continue;
+      var w = Math.max(1, Math.ceil((2 * one + cfg.buffer / 60) / iv - 1e-9));
+      sum += w * ((t.wave !== null && t.wave > 0) ? t.wave : cfg.wave);
+      if (sum > avail){ ok = false; break; }
+    }
+    if (ok && sum > 0) return iv;
+  }
+  return null;
+}
+
+/* ---------- rendu ---------- */
+var $ = function(id){ return document.getElementById(id); };
+function fmt(v, dec){
+  if (v === null || v === undefined || isNaN(v)) return "—";
+  return v.toLocaleString("fr-FR", {minimumFractionDigits:dec||0, maximumFractionDigits:dec||0});
+}
+function fmtHMS(min){
+  if (min === null || min === undefined || isNaN(min)) return "—";
+  var s = Math.round(min * 60);
+  var h = Math.floor(s / 3600); s -= h * 3600;
+  var m = Math.floor(s / 60); s -= m * 60;
+  var p = function(n){ return n < 10 ? "0" + n : "" + n; };
+  return h + ":" + p(m) + ":" + p(s);
+}
+function esc(s){
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function renderTable(rows){
+  var tb = $("tbody");
+  if (!rows.length){
+    tb.innerHTML = '<tr><td colspan="10" class="empty">Aucune cible. Colle ta liste de pillage ci-dessus.</td></tr>';
+    $("tfoot").innerHTML = "";
+    return;
+  }
+  var h = "";
+  for (var i = 0; i < rows.length; i++){
+    var r = rows[i], t = r.t;
+    h += '<tr data-i="' + i + '">'
+      + '<td class="delcell"><button type="button" class="del" data-del="' + i
+        + '" aria-label="Supprimer ' + esc(t.name) + '" title="Retirer cette ferme">&times;</button></td>'
+      + '<td class="namecell"><input type="text" data-k="name" value="' + esc(t.name) + '" aria-label="Nom de la cible"></td>'
+      + '<td class="coord">' + (t.x === null ? "—" : t.x + "|" + t.y) + '</td>'
+      + '<td><input class="mini" type="number" step="0.01" min="0" data-k="dist" value="' + (t.dist === null ? "" : t.dist) + '" aria-label="Distance en cases" style="width:76px"></td>'
+      + '<td class="out" data-o="one">' + fmtHMS(r.one) + '</td>'
+      + '<td class="out strong" data-o="cycle">' + (r.cycle === null ? "—" : fmt(r.cycle, 1) + " min") + '</td>'
+      + '<td><input class="mini" type="number" step="0.5" min="0.5" data-k="interval" value="' + (t.interval === null ? "" : t.interval) + '" placeholder="' + cfg.interval + '" aria-label="Delai" style="width:64px"></td>'
+      + '<td><input class="mini" type="number" step="1" min="1" data-k="wave" value="' + (t.wave === null ? "" : t.wave) + '" placeholder="' + cfg.wave + '" aria-label="Troupes par vague" style="width:76px"></td>'
+      + '<td class="out"><span class="wv' + (r.waves > 8 ? ' hot' : '') + '">' + (r.waves === null ? "—" : r.waves) + '</span></td>'
+      + '<td class="out total" data-o="total">' + fmt(r.total) + '</td>'
+      + '</tr>';
+  }
+  tb.innerHTML = h;
+
+  var sumW = 0, sumT = 0, sumD = 0;
+  rows.forEach(function(r){
+    if (r.waves) sumW += r.waves;
+    if (r.total) sumT += r.total;
+    if (r.iv && r.cycle !== null) sumD += 60 / r.iv;
+  });
+  $("tfoot").innerHTML = '<tr><td colspan="8">' + rows.length + ' cible' + (rows.length > 1 ? 's' : '')
+    + ' &middot; ' + fmt(sumD, 0) + ' départs/h</td>'
+    + '<td class="out" style="font-weight:600">' + fmt(sumW) + '</td>'
+    + '<td class="out total">' + fmt(sumT) + '</td></tr>';
+}
+
+function renderTiles(rows){
+  var troops = 0, waves = 0, dep = 0, live = 0;
+  rows.forEach(function(r){
+    if (r.total === null) return;
+    live++; troops += r.total; waves += r.waves; dep += 60 / r.iv;
+  });
+  $("tTroops").textContent = fmt(troops);
+  $("tTroopsSub").textContent = live ? "sur " + live + " cible" + (live > 1 ? "s" : "") : "Aucune cible calculable";
+  $("tWaves").textContent = fmt(waves);
+  $("tWavesSub").textContent = "vitesse " + fmt(effSpeed(), 2) + " cases/h";
+  $("tDep").textContent = fmt(dep);
+  $("tDepSub").textContent = dep > 0 ? "un envoi toutes les " + fmt(60 / dep, 1) + " min" : " ";
+
+  var need = troops, avail = cfg.available, box = $("feas");
+  if (!(avail > 0) || !live){ box.hidden = true; return; }
+  box.hidden = false;
+  var txt, cls;
+  if (avail >= need){
+    cls = "good";
+    txt = "Tenable : " + fmt(avail - need) + " troupes en réserve sur " + fmt(avail) + ".";
+    var mi = minInterval(avail);
+    if (mi !== null && mi < cfg.interval) txt += " Avec ce stock tu peux descendre le délai à " + fmt(mi, 1) + " min.";
+  } else {
+    var mi2 = minInterval(avail);
+    cls = (need - avail) / need > 0.35 ? "crit" : "warn";
+    txt = "Il manque " + fmt(need - avail) + " troupes. ";
+    txt += mi2 !== null
+      ? "Avec " + fmt(avail) + " troupes, le délai tenable est d’environ " + fmt(mi2, 1) + " min."
+      : "Augmente le délai ou retire des cibles.";
+  }
+  box.className = "status " + cls;
+  $("feasTxt").textContent = txt;
+}
+
+function renderChart(rows){
+  var live = rows.filter(function(r){ return r.cycle !== null; });
+  var box = $("chartbox");
+  if (!live.length){
+    box.innerHTML = '<p class="empty">Rien à planifier pour l’instant.</p>';
+    $("chartNote").textContent = "";
+    return;
+  }
+  var WIN = 60, W = 900, L = 176, R = 24, T = 30, LH = 26;
+  var H = T + live.length * LH + 16;
+  var px = function(min){ return L + (min / WIN) * (W - L - R); };
+
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Plan des départs sur une heure">';
+  for (var g = 0; g <= WIN; g += 10){
+    s += '<line class="grid-l" x1="' + px(g).toFixed(1) + '" y1="' + (T - 10) + '" x2="' + px(g).toFixed(1) + '" y2="' + (H - 10) + '"/>'
+      +  '<text class="ax-lbl" x="' + px(g).toFixed(1) + '" y="' + (T - 16) + '" text-anchor="middle">' + (g === 0 ? "0" : g + "′") + '</text>';
+  }
+  var total = 0;
+  for (var i = 0; i < live.length; i++){
+    var r = live[i], y = T + i * LH + LH / 2;
+    var base = r.t.name + (r.t.x !== null ? " " + r.t.x + "|" + r.t.y : "");
+    var label = base.length > 26 ? base.slice(0, 25) + "…" : base;
+    s += '<text class="lane-lbl" x="' + (L - 12) + '" y="' + (y + 4) + '" text-anchor="end">' + esc(label) + '</text>'
+      +  '<line class="lane-rail" x1="' + px(0) + '" y1="' + y + '" x2="' + px(WIN) + '" y2="' + y + '"/>';
+    var offset = (i / live.length) * r.iv, k = 0;
+    for (var m = offset; m < WIN; m += r.iv){
+      s += '<circle class="dep" cx="' + px(m).toFixed(1) + '" cy="' + y + '" r="4.5"><title>'
+        + esc(base) + " · départ à +" + m.toFixed(1) + " min · groupe " + ((k % r.waves) + 1) + "/" + r.waves
+        + " · " + r.wave + " troupes · retour à +" + (m + r.cycle - cfg.buffer / 60).toFixed(1) + " min</title></circle>";
+      k++; total++;
+    }
+  }
+  box.innerHTML = s + '</svg>';
+  $("chartNote").textContent = total + " départs sur l’heure affichée. Survole un point pour le groupe, la taille de la vague et l’heure de retour.";
+}
+
+function render(){
+  var rows = computeAll();
+  var cs = calibSpeed();
+  $("calibOut").textContent = cfg.calib
+    ? (cs !== null && cs > 0
+        ? "Vitesse déduite : " + fmt(cs, 2) + " cases/h — elle remplace le champ ci-dessus."
+        : "Renseigne une distance et un temps non nuls.")
+    : "";
+  renderTable(rows);
+  renderTiles(rows);
+  renderChart(rows);
+  save();
+}
+
+/* ---------- formulaire ---------- */
+var NUMKEYS = ["speed","interval","buffer","wave","available","calibDist","calibH","calibM","calibS"];
+var SELKEYS = ["serverSpeed","ts"];
+
+function syncForm(){
+  NUMKEYS.forEach(function(k){ $(k).value = cfg[k]; });
+  SELKEYS.forEach(function(k){ $(k).value = String(cfg[k]); });
+  $("calib").checked = !!cfg.calib;
+  $("calibBox").hidden = !cfg.calib;
+}
+
+function bind(){
+  var o = "";
+  for (var i = 0; i <= 20; i++) o += '<option value="' + i + '">' + (i === 0 ? "Aucune" : "Niveau " + i) + '</option>';
+  $("ts").innerHTML = o;
+  $("preset").innerHTML = '<option value="">— choisir —</option>' + PRESETS.map(function(u){
+    return '<option value="' + u[1] + '">' + esc(u[0]) + ' (' + u[1] + ')</option>';
+  }).join("");
+  syncForm();
+
+  NUMKEYS.forEach(function(k){
+    $(k).addEventListener("input", function(){
+      var v = parseFloat(this.value);
+      cfg[k] = isNaN(v) ? 0 : v;
+      render();
+    });
+  });
+  SELKEYS.forEach(function(k){
+    $(k).addEventListener("change", function(){ cfg[k] = parseFloat(this.value); render(); });
+  });
+  $("preset").addEventListener("change", function(){
+    var v = parseFloat(this.value);
+    if (!isNaN(v) && v > 0){ cfg.speed = v; $("speed").value = v; render(); }
+  });
+  $("calib").addEventListener("change", function(){
+    cfg.calib = this.checked; $("calibBox").hidden = !this.checked; render();
+  });
+
+  $("tbody").addEventListener("input", function(e){
+    var inp = e.target;
+    if (!inp.dataset || !inp.dataset.k) return;
+    var tr = inp.closest("tr"), i = parseInt(tr.dataset.i, 10), t = targets[i];
+    if (!t) return;
+    var k = inp.dataset.k;
+    if (k === "name") t.name = inp.value;
+    else {
+      var v = inp.value.trim() === "" ? null : parseFloat(inp.value.replace(",", "."));
+      t[k] = (v === null || isNaN(v)) ? null : v;
+    }
+    var rows = computeAll(), r = rows[i];
+    renderTiles(rows); renderChart(rows);
+    var set = function(nm, txt){ var el = tr.querySelector('[data-o="' + nm + '"]'); if (el) el.textContent = txt; };
+    set("one", fmtHMS(r.one));
+    set("cycle", r.cycle === null ? "—" : fmt(r.cycle, 1) + " min");
+    set("total", fmt(r.total));
+    var wv = tr.querySelector(".wv");
+    if (wv){
+      wv.textContent = r.waves === null ? "—" : r.waves;
+      wv.className = "wv" + (r.waves > 8 ? " hot" : "");
+    }
+    save();
+  });
+  /* Une seule suppression est rattrapable : assez pour le clic de trop,
+     sans transformer la page en historique. */
+  var undo = null;
+  function showUndo(nom){
+    $("undoTxt").textContent = nom + " retirée de la liste.";
+    $("undoBar").hidden = false;
+  }
+  function clearUndo(){ undo = null; $("undoBar").hidden = true; }
+
+  $("tbody").addEventListener("click", function(e){
+    var b = e.target.closest("[data-del]");
+    if (!b) return;
+    var i = parseInt(b.dataset.del, 10);
+    if (!targets[i]) return;
+    undo = {index: i, target: targets[i]};
+    var nom = targets[i].name || "La cible";
+    targets.splice(i, 1);
+    showUndo(nom);
+    render();
+  });
+  $("undoBtn").addEventListener("click", function(){
+    if (!undo) return;
+    targets.splice(Math.min(undo.index, targets.length), 0, undo.target);
+    clearUndo();
+    render();
+  });
+
+  $("addRow").addEventListener("click", function(){
+    clearUndo();
+    targets.push(blank({name:"Nouvelle cible", dist:10}));
+    render();
+    var last = $("tbody").querySelector("tr:last-child input");
+    if (last){ last.focus(); last.select(); }
+  });
+  $("clearRows").addEventListener("click", function(){ clearUndo(); targets = []; render(); });
+  $("reset").addEventListener("click", function(){
+    clearUndo();
+    for (var k in DEF) cfg[k] = DEF[k];
+    targets = SAMPLE.map(blank);
+    syncForm(); render();
+  });
+
+  /* ---- collage ---- */
+  var ORD = ["1er","2e","3e","4e","5e","6e","7e","8e"];
+  var TAB_ARROW = "→", NB_BOX = "␣", MINUS_SIGN = "−";
+
+  function reveal(line){
+    var html = "";
+    for (var i = 0; i < line.length; i++){
+      var c = line.charAt(i), code = line.charCodeAt(i);
+      if (isInvis(code)) html += '<span class="inv">i</span>';
+      else if (code === 9) html += '<span class="inv">' + TAB_ARROW + '</span>';
+      else if (code === 160 || code === 8239) html += '<span class="inv">' + NB_BOX + '</span>';
+      else if (code === 8722) html += '<span class="inv">' + MINUS_SIGN + '</span>';
+      else if (code < 32) html += '<span class="inv">?</span>';
+      else html += esc(c);
+    }
+    return html;
+  }
+  function renderDiag(trace){
+    var h = '<details open><summary>Diagnostic ligne par ligne (' + trace.length
+      + ' lignes lues)</summary><div style="overflow-x:auto"><table class="diag">'
+      + '<thead><tr><th>#</th><th>Ligne telle qu’elle arrive</th><th>Nom lu</th>'
+      + '<th>Coord.</th><th>Nombres</th><th>Effet</th></tr></thead><tbody>';
+    for (var i = 0; i < trace.length; i++){
+      var t = trace[i];
+      var cls = t.act === "nouvelle ferme" ? "new" : (t.act === "ignoree" ? "skip" : "");
+      h += '<tr class="' + cls + '"><td>' + t.i + '</td>'
+        + '<td class="raw">' + reveal(t.raw) + '</td>'
+        + '<td>' + (t.name ? esc(t.name) : "—") + '</td>'
+        + '<td>' + (t.x !== null ? t.x + "|" + t.y : "—") + '</td>'
+        + '<td>' + (t.nums.length ? t.nums.join(" ") : "—") + '</td>'
+        + '<td class="act">' + t.act + '</td></tr>';
+    }
+    return h + '</tbody></table></div></details>';
+  }
+  function showPreview(res, txt){
+    var box = $("parsePreview"), found = res.items, rejected = res.rejected || [];
+    if (!found.length && !rejected.length){ box.hidden = true; box.innerHTML = ""; return; }
+    var srcLines = txt.split(String.fromCharCode(10)).filter(function(l){ return l.trim(); }).length;
+
+    var h = '<p style="margin:0 0 7px; font-size:12px; color:var(--ink-2)"><strong>'
+      + found.length + ' cible' + (found.length > 1 ? 's' : '') + '</strong> sur ' + srcLines
+      + ' ligne' + (srcLines > 1 ? 's' : '') + '. Une cible = nom + coordonnées + distance.</p>';
+
+    if (res.col >= 0 && res.width){
+      h += '<p style="margin:0 0 7px; font-size:12px; color:var(--ink-2)">Distance lue sur le <strong>'
+        + (ORD[res.col] || (res.col + 1) + "e") + ' nombre</strong> de chaque ferme (' + res.width
+        + ' nombre' + (res.width > 1 ? 's' : '') + ' par ferme, heures et totaux exclus).</p>';
+    }
+    if (res.coordCount >= 3 && res.recCount <= 1){
+      h += '<p style="margin:0 0 7px; font-size:12px; color:var(--warn)">Le collage tient sur une seule ligne : '
+        + res.coordCount + ' paires de coordonnées s’y trouvent mais rien ne les sépare. '
+        + 'Recolle en conservant les retours à la ligne.</p>';
+    }
+    if (found.length){
+      h += '<ol>';
+      for (var i = 0; i < found.length; i++){
+        var f = found[i];
+        h += '<li><b>' + esc(f.name) + '</b> — (' + f.x + '|' + f.y + ') · ' + fmt(f.dist, 2) + ' cases'
+          + (f.wave !== null ? ' · ' + f.wave + ' tr.' : '') + '</li>';
+      }
+      h += '</ol>';
+    }
+    if (rejected.length){
+      h += '<details><summary>' + rejected.length + ' fragment' + (rejected.length > 1 ? 's' : '')
+        + ' écarté' + (rejected.length > 1 ? 's' : '') + ' — voir pourquoi</summary><ul style="margin-top:8px">';
+      var lim = Math.min(rejected.length, 30);
+      for (var j = 0; j < lim; j++){
+        h += '<li>' + esc(rejected[j].label) + ' <span style="color:var(--warn)">— sans '
+          + rejected[j].why.join(", ") + '</span></li>';
+      }
+      if (rejected.length > lim) h += '<li>… et ' + (rejected.length - lim) + ' autre(s)</li>';
+      h += '</ul></details>';
+    }
+    if ($("pDiag").checked && res.trace) h += renderDiag(res.trace);
+    box.innerHTML = h;
+    box.hidden = false;
+  }
+
+  function keyOf(t){ return t.x + "|" + t.y; }
+
+  function doParse(replace, previewOnly){
+    var txt = $("paste").value, msg = $("parseMsg");
+    if (!txt.trim()){
+      msg.className = "parse-msg ko"; msg.textContent = "Le cadre est vide.";
+      $("parsePreview").hidden = true; return;
+    }
+    clearUndo();
+    var res = parseFarmList(txt, $("pTroops").value === "1", parseInt($("pDistCol").value, 10));
+    var found = res.items;
+    showPreview(res, txt);
+
+    if (!found.length){
+      msg.className = "parse-msg ko";
+      msg.textContent = "Aucune cible complète : il faut un nom, des coordonnées et une distance."
+        + (res.rejected.length ? " Ouvre le détail ci-dessus pour voir ce qui manque." : "");
+      return;
+    }
+    if (previewOnly){
+      msg.className = "parse-msg";
+      msg.textContent = found.length + " cible" + (found.length > 1 ? "s" : "")
+        + " avec ce réglage. Clique sur « Remplacer » ou « Ajouter » pour valider.";
+      return;
+    }
+    var n;
+    if (replace){
+      targets = found; n = found.length;
+      msg.className = "parse-msg ok";
+      msg.textContent = n + " cible" + (n > 1 ? "s" : "") + " chargée" + (n > 1 ? "s" : "") + ", liste remplacée.";
+    } else {
+      var seen = {};
+      targets.forEach(function(t){ seen[keyOf(t)] = 1; });
+      var added = found.filter(function(f){ return !seen[keyOf(f)]; });
+      targets = targets.concat(added);
+      n = added.length;
+      if (!n){
+        msg.className = "parse-msg";
+        msg.textContent = "Les " + found.length + " cibles lues sont déjà dans la liste.";
+      } else {
+        msg.className = "parse-msg ok";
+        msg.textContent = n + " cible" + (n > 1 ? "s" : "") + " ajoutée" + (n > 1 ? "s" : "")
+          + (found.length > n ? " · " + (found.length - n) + " déjà présente(s)" : "") + ".";
+      }
+    }
+    render();
+  }
+
+  $("parseReplace").addEventListener("click", function(){ doParse(true); });
+  $("parseAdd").addEventListener("click", function(){ doParse(false); });
+  $("clearPaste").addEventListener("click", function(){
+    $("paste").value = ""; $("parseMsg").textContent = ""; $("parseMsg").className = "parse-msg";
+    $("parsePreview").hidden = true; $("parsePreview").innerHTML = "";
+  });
+  $("pDistCol").addEventListener("change", function(){ if ($("paste").value.trim()) doParse(false, true); });
+  $("pTroops").addEventListener("change", function(){ if ($("paste").value.trim()) doParse(false, true); });
+  $("pDiag").addEventListener("change", function(){ if ($("paste").value.trim()) doParse(false, true); });
+}
+
+load();
+bind();
+render();
+
+})();
+</script>
+</body>
+</html>
