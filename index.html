@@ -536,9 +536,42 @@ function stripInvis(str){
   return out;
 }
 
+/* Travian ecrit les milliers avec un separateur : "1 427". Sans precaution
+   le lecteur y voit DEUX nombres, 1 et 427, et retient 427 comme cumul.
+   Un separateur de milliers est soit une espace insecable, soit une espace
+   ordinaire a l'interieur d'un nombre deja enferme dans les marques
+   bidirectionnelles de Travian. Un separateur de CELLULE, lui, est une
+   tabulation ou un retour a la ligne : on ne fusionne jamais a travers. */
+function estOuvrante(c){ return c===0x202A||c===0x202B||c===0x202D||c===0x202E||c===0x2066||c===0x2067||c===0x2068; }
+function estFermante(c){ return c===0x202C||c===0x2069; }
+function estEspace(c){ return c===0x20||c===0xA0||c===0x202F||c===0x2007||c===0x2009||c===0x2005||c===0x2006; }
+function estInsecable(c){ return c===0xA0||c===0x202F||c===0x2007||c===0x2009||c===0x2005||c===0x2006; }
+function estChiffre(c){ return c>=0x30 && c<=0x39; }
+
+function fusionneMilliers(str){
+  var out = "", profondeur = 0;
+  for (var i = 0; i < str.length; i++){
+    var c = str.charCodeAt(i);
+    if (estOuvrante(c)){ profondeur++; out += str.charAt(i); continue; }
+    if (estFermante(c)){ if (profondeur > 0) profondeur--; out += str.charAt(i); continue; }
+    if (estEspace(c)){
+      /* chiffre juste avant, trois chiffres juste apres, et soit une espace
+         insecable, soit un nombre mis en forme par le jeu : c'est un millier */
+      var avant = out.length ? out.charCodeAt(out.length - 1) : 0;
+      var j = i + 1, suite = 0;
+      while (j < str.length && estChiffre(str.charCodeAt(j))){ suite++; j++; }
+      var suivi = (j < str.length) ? str.charCodeAt(j) : 0;
+      if (estChiffre(avant) && suite === 3 && !estChiffre(suivi)
+          && (estInsecable(c) || profondeur > 0)) continue;
+    }
+    out += str.charAt(i);
+  }
+  return out;
+}
+
 function scanLine(line){
   var f = {name:"", x:null, y:null, nums:[], times:[]};
-  var rest = stripInvis(line);
+  var rest = stripInvis(fusionneMilliers(line));
 
   COORD_RE.lastIndex = 0;
   var m = COORD_RE.exec(rest);
