@@ -388,7 +388,8 @@ details.meth ul{padding-left:18px; margin:10px 0 0; color:var(--ink-2); font-siz
         <table style="min-width:720px">
           <thead><tr>
             <th>Ferme</th><th>Coord.</th><th class="r">Butin/h</th><th class="r">1 h</th>
-            <th class="r">12 h</th><th class="r">24 h</th><th class="r">Dernier pillage</th><th class="r">Cumul</th>
+            <th class="r">12 h</th><th class="r">24 h</th><th class="r">Dernier pillage</th>
+            <th class="r">&Sigma; jeu</th><th class="r">Total mesur&eacute;</th>
           </tr></thead>
           <tbody id="yBody"></tbody>
           <tfoot id="yFoot"></tfoot>
@@ -1021,18 +1022,43 @@ function snapProche(t, tolerance){
   return (best && ecart <= tolerance) ? best : null;
 }
 
-/* Butin par ferme entre deux relevés. */
+/* Butin par ferme entre deux relevés CONSECUTIFS. */
 function ecart(s0, s1){
-  var parFerme = {}, total = 0;
+  var parFerme = {}, total = 0, remises = 0;
   if (!s0 || !s1 || s0.t >= s1.t) return {parFerme: parFerme, total: 0, remises: 0};
-  var remises = 0;
   for (var k in s1.f){
     if (!s0.f[k]) continue;
     var d = s1.f[k].c - s0.f[k].c;
-    if (d < 0){ remises++; continue; }
+    if (d < 0){
+      /* Le compteur du jeu est reparti de zero. Ce qui reste mesurable, c'est
+         ce qu'il a accumule DEPUIS la remise : un minorant, jamais zero.
+         Seul se perd le butin des minutes entre le dernier releve et la remise. */
+      d = s1.f[k].c;
+      remises++;
+    }
     parFerme[k] = d; total += d;
   }
   return {parFerme: parFerme, total: total, remises: remises};
+}
+
+/* Butin sur une periode, en cumulant les ecarts de proche en proche plutot
+   qu'en soustrayant les deux extremites. C'est ce qui rend l'outil insensible
+   aux remises a zero du jeu : une remise n'abime plus que le seul intervalle
+   qui la contient, au lieu de fausser toute la fenetre. Et le cas ou le
+   compteur repasse au-dessus de son ancienne valeur avant le releve suivant,
+   invisible d'extremite a extremite, est desormais compte correctement. */
+function ecartChaine(t0, t1){
+  var parFerme = {}, total = 0, remises = 0;
+  var lot = SNAPS.filter(function(s){ return s.t >= t0 && s.t <= t1; });
+  for (var i = 1; i < lot.length; i++){
+    var e = ecart(lot[i - 1], lot[i]);
+    remises += e.remises;
+    for (var k in e.parFerme){
+      parFerme[k] = (parFerme[k] || 0) + e.parFerme[k];
+      total += e.parFerme[k];
+    }
+  }
+  return {parFerme: parFerme, total: total, remises: remises, releves: lot.length};
 }
 
 /* Couverture réelle de l'historique, en millisecondes. */
@@ -1049,11 +1075,11 @@ function fenetre(ms){
   var tol = Math.min(ms * 0.3, 45 * 60000);
   var depart = snapProche(dernier.t - ms, tol);
   if (depart && depart.t < dernier.t){
-    var e = ecart(depart, dernier);
+    var e = ecartChaine(depart.t, dernier.t);
     return {mesure: true, total: e.total, parFerme: e.parFerme,
             duree: dernier.t - depart.t, remises: e.remises};
   }
-  var global = ecart(snapPremier(), dernier);
+  var global = ecartChaine(snapPremier().t, dernier.t);
   var cov = couverture();
   if (!cov) return null;
   var facteur = ms / cov, parFerme = {};
@@ -1065,8 +1091,9 @@ function fenetre(ms){
 function debitHoraire(){
   var cov = couverture();
   if (!cov) return null;
-  var e = ecart(snapPremier(), snapDernier());
-  return {parHeure: e.total / (cov / H), parFerme: e.parFerme, duree: cov, remises: e.remises};
+  var e = ecartChaine(snapPremier().t, snapDernier().t);
+  return {parHeure: e.total / (cov / H), parFerme: e.parFerme, duree: cov,
+          remises: e.remises, total: e.total};
 }
 
 /* ---------- synchronisation ---------- */
@@ -1114,6 +1141,16 @@ function val(x, estime){
   return estime ? '<span class="est">' + t + '</span>' : t;
 }
 
+/* Le jeu remet les compteurs a zero (changement de jour). L'outil ne perd
+   plus le butin pour autant, mais il le dit : seules les minutes entre le
+   dernier releve et la remise echappent a la mesure. */
+function remisesTxt(debit){
+  if (!debit || !debit.remises) return "";
+  return " " + debit.remises + " remise" + (debit.remises > 1 ? "s" : "") + " à zéro du compteur du jeu "
+    + (debit.remises > 1 ? "ont été absorbées" : "a été absorbée")
+    + " : seul le butin des minutes précédant chaque remise a échappé à la mesure.";
+}
+
 function renderYield(){
   var dernier = snapDernier(), debit = debitHoraire();
   var f1 = fenetre(H), f12 = fenetre(12 * H), f24 = fenetre(24 * H);
@@ -1139,16 +1176,16 @@ function renderYield(){
   } else if (cov < 24 * H){
     box.hidden = false; box.className = "status warn";
     $("covTxt").textContent = "Couverture réelle : " + dureeTexte(cov) + " sur " + SNAPS.length
-      + " relevés. Les fenêtres plus longues que ça sont extrapolées du débit moyen et marquées d’un tilde.";
+      + " relevés. Les fenêtres plus longues que ça sont extrapolées du débit moyen et marquées d’un tilde." + remisesTxt(debit);
   } else {
     box.hidden = false; box.className = "status good";
     $("covTxt").textContent = "Couverture réelle : " + dureeTexte(cov) + " sur " + SNAPS.length
-      + " relevés. Les trois fenêtres sont mesurées.";
+      + " relevés. Les trois fenêtres sont mesurées." + remisesTxt(debit);
   }
 
   var tb = $("yBody");
   if (!dernier){
-    tb.innerHTML = '<tr><td colspan="8" class="empty">Pas encore de relevé.</td></tr>';
+    tb.innerHTML = '<tr><td colspan="9" class="empty">Pas encore de relevé.</td></tr>';
     $("yFoot").innerHTML = "";
     return;
   }
@@ -1172,7 +1209,8 @@ function renderYield(){
       + '<td class="out">' + val(b, f12 && !f12.mesure) + '</td>'
       + '<td class="out">' + val(c, f24 && !f24.mesure) + '</td>'
       + '<td class="out">' + (e.h ? esc(e.h) : "—") + '</td>'
-      + '<td class="out total">' + fmt(e.c) + '</td></tr>';
+      + '<td class="out">' + fmt(e.c) + '</td>'
+      + '<td class="out total">' + val(debit && debit.parFerme[k]) + '</td></tr>';
   });
   tb.innerHTML = h;
   $("yFoot").innerHTML = '<tr><td colspan="2">' + cles.length + ' ferme' + (cles.length > 1 ? 's' : '') + '</td>'
@@ -1180,7 +1218,8 @@ function renderYield(){
     + '<td class="out total">' + val(tot.a, f1 && !f1.mesure) + '</td>'
     + '<td class="out total">' + val(tot.b, f12 && !f12.mesure) + '</td>'
     + '<td class="out total">' + val(tot.c, f24 && !f24.mesure) + '</td>'
-    + '<td colspan="2"></td></tr>';
+    + '<td colspan="2"></td>'
+    + '<td class="out total">' + val(debit && debit.total) + '</td></tr>';
 
   var liste = SNAPS.slice().reverse().slice(0, 40).map(function(sn){
     var d = new Date(sn.t);
