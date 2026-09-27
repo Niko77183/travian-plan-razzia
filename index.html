@@ -286,7 +286,7 @@ details.meth ul{padding-left:18px; margin:10px 0 0; color:var(--ink-2); font-siz
     <section class="panel">
       <h2>Coller la liste de pillage</h2>
       <p class="hint">S&eacute;lectionne la page du point de ralliement et colle-la enti&egrave;re. Les villages et les oasis sont reconnus par leurs coordonn&eacute;es ou les colonnes du tableau, quel que soit leur nom. Les coordonn&eacute;es absentes restent indiqu&eacute;es par un tiret.</p>
-      <p class="note">Les fermes explicitement marqu&eacute;es &laquo; d&eacute;sactiv&eacute;e &raquo; ou &laquo; inactive &raquo; dans le collage sont exclues. Si leur &eacute;tat n&rsquo;est indiqu&eacute; que par une ic&ocirc;ne, le texte seul ne permet pas de le d&eacute;tecter : copie uniquement les fermes actives. Sans coordonn&eacute;es, une cible est identifi&eacute;e par son nom et sa distance.</p>
+      <p class="note">Colle directement depuis Travian avec Ctrl + V pour conserver les marqueurs de grisement. Les fermes reconnues comme d&eacute;sactiv&eacute;es sont isol&eacute;es dans &laquo; Fermes exclues &raquo;. Si le navigateur ne transmet pas cet &eacute;tat, utilise le bouton Exclure. Sans coordonn&eacute;es, une cible est identifi&eacute;e par son nom et sa distance.</p>
       <textarea id="paste" spellcheck="false" placeholder="Oasis inoccupée (17|−62)	0	2.2	1"></textarea>
       <div class="btns" style="margin-top:10px">
         <button type="button" id="parseReplace">Remplacer la liste</button>
@@ -329,6 +329,11 @@ details.meth ul{padding-left:18px; margin:10px 0 0; color:var(--ink-2); font-siz
           <tfoot id="tfoot"></tfoot>
         </table>
       </div>
+      <details id="excludedFarms" open hidden style="margin-top:16px">
+        <summary id="excludedTitle">Fermes exclues — hors calcul</summary>
+        <p class="note">Ces fermes ne mobilisent aucune troupe et ne figurent pas dans le plan de départs. Les exclusions sont conservées lors des prochains imports.</p>
+        <ul id="excludedList"></ul>
+      </details>
       <div id="undoBar" class="status warn" hidden>
         <span class="dot"></span><span id="undoTxt"></span>
         <button type="button" class="ghost" id="undoBtn">Annuler</button>
@@ -337,6 +342,13 @@ details.meth ul{padding-left:18px; margin:10px 0 0; color:var(--ink-2); font-siz
         <button type="button" class="ghost" id="addRow">Ajouter une cible</button>
         <button type="button" class="ghost" id="clearRows">Tout effacer</button>
       </div>
+      <details class="meth">
+        <summary>Exclure plusieurs fermes depuis une liste</summary>
+        <p class="note">Si le grisement n’a pas été transmis, colle ici uniquement les lignes des fermes désactivées, puis applique leur exclusion.</p>
+        <textarea id="excludePaste" spellcheck="false" aria-label="Liste des fermes à exclure"></textarea>
+        <button type="button" class="ghost" id="excludeBatch">Exclure ces fermes</button>
+        <p id="excludeMsg" class="note" role="status"></p>
+      </details>
       <details class="meth">
         <summary>Comment le total est obtenu</summary>
         <ul>
@@ -458,6 +470,8 @@ var cfg, targets, uid = 1;
 function blank(o){
   return {
     id: uid++,
+    active: o.active !== false,
+    excludedBy: o.excludedBy || null,
     name: o.name || "",
     x: (o.x === undefined ? null : o.x),
     y: (o.y === undefined ? null : o.y),
@@ -722,10 +736,9 @@ function parseFarmList(text, useTroops, forcedCol){
   var col = (forcedCol !== null && forcedCol !== undefined && forcedCol >= 0)
     ? forcedCol : inferDistCol(candidates.length ? candidates : recs);
 
-  var items = [], releve = [], rejected = [], seen = {};
+  var items = [], excluded = [], releve = [], rejected = [], seen = {};
   for (var r2 = 0; r2 < recs.length; r2++){
     var rec = recs[r2];
-    if (rec.inactive){ rejected.push({label:describeRec(rec), why:["ferme désactivée"]}); continue; }
     var dist = null, usedIdx = -1;
     var recCol = forcedCol >= 0 && forcedCol !== null && forcedCol !== undefined
       ? forcedCol : (rec.structured ? 1 : col);
@@ -748,7 +761,12 @@ function parseFarmList(text, useTroops, forcedCol){
     var key = targetKey({name:nom, x:rec.x, y:rec.y, dist:dist});
     if (seen[key]) continue;
     seen[key] = 1;
-    items.push(blank({name:nom, x:rec.x, y:rec.y, dist:dist, wave:wave}));
+    var target = blank({name:nom, x:rec.x, y:rec.y, dist:dist, wave:wave});
+    if (rec.inactive){
+      target.active = false; target.excludedBy = "source";
+      excluded.push(target); continue;
+    }
+    items.push(target);
 
     /* Colonne "Dernier pillage" : apres la distance et les troupes viennent
        le butin du dernier raid puis le cumul. Le cumul contient le dernier
@@ -769,7 +787,7 @@ function parseFarmList(text, useTroops, forcedCol){
   }
 
   return {
-    items: items, releve: releve, rejected: rejected, col: recs.some(function(r){ return r.structured; }) && !(forcedCol >= 0) ? 1 : col, trace: trace,
+    items: items, excluded: excluded, releve: releve, rejected: rejected, col: recs.some(function(r){ return r.structured; }) && !(forcedCol >= 0) ? 1 : col, trace: trace,
     width: recs.reduce(function(a, r){ return Math.max(a, r.nums.length); }, 0),
     coordCount: coordCount, recCount: recs.length
   };
@@ -791,6 +809,93 @@ function describeRec(rec){
   if (rec.x !== null) return "(" + rec.x + "|" + rec.y + ")";
   var n = rec.nums.slice(0, 5).map(function(o){ return o.v; });
   return n.length ? n.join(" ") : "fragment vide";
+}
+
+/* Le texte seul ne contient pas les états visuels. On garde les métadonnées
+   du collage HTML en mémoire, sans injecter ce HTML dans l'interface. */
+var pastedMetadata = Object.create(null);
+function clipboardFarmStates(html){
+  if (!html) return [];
+  var template = document.createElement("template");
+  template.innerHTML = html;
+  var states = [];
+  Array.from(template.content.querySelectorAll("tr")).forEach(function(row){
+    var cells = Array.from(row.children).filter(function(el){ return /^(TD|TH)$/.test(el.tagName); });
+    var values = cells.map(function(cell){ return stripInvis(fusionneMilliers(cell.textContent)).trim(); });
+    var numeric = /^\d+(?:[.,]\d+)?$/;
+    var start = -1;
+    for (var i = 0; i < values.length - 2; i++){
+      if (values[i] && numeric.test(values[i + 1]) && numeric.test(values[i + 2])){ start = i; break; }
+    }
+    if (start < 0) return;
+    var parsed = scanLine(values.slice(start, start + 3).join("\t"));
+    if (!parsed.structured || !parsed.name) return;
+    var nameCell = cells[start];
+    var nodes = [row, nameCell].concat(Array.from(nameCell.querySelectorAll("a,span")));
+    var inactive = nodes.some(function(el){
+      var cls = (el.getAttribute("class") || "").replace(/([a-z])([A-Z])/g, "$1 $2");
+      return /(?:^|[\s_-])(?:disabled|deactivated|inactive|grayed|greyed|gray|grey)(?:$|[\s_-])/i.test(cls)
+        || el.getAttribute("aria-disabled") === "true"
+        || el.getAttribute("data-active") === "false"
+        || el.getAttribute("data-active") === "0";
+    });
+    var color = "";
+    nodes.forEach(function(el){
+      var style = el.getAttribute("style") || "";
+      var m = /(?:^|;)\s*color\s*:\s*([^;]+)/i.exec(style);
+      if (m) color = m[1].trim().toLowerCase();
+      var opacity = /(?:^|;)\s*opacity\s*:\s*([\d.]+)/i.exec(style);
+      if (opacity && Number(opacity[1]) < 1) inactive = true;
+    });
+    var rgb = /^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/.exec(color);
+    var hex = /^#([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(color);
+    if (hex){
+      var h = hex[1]; if (h.length === 3) h = h.split("").map(function(c){ return c + c; }).join("");
+      rgb = ["", parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+    }
+    var gray = /^(?:gray|grey|darkgray|darkgrey|silver)$/.test(color)
+      || !!(rgb && Number(rgb[1]) >= 120 && Number(rgb[1]) <= 220 && rgb[1] == rgb[2] && rgb[2] == rgb[3]);
+    states.push({name:parsed.name, dist:parsed.nums[1].v, inactive:inactive, gray:gray, color:color});
+  });
+  // Une couleur grise uniforme n'établit pas un état : il faut un contraste
+  // avec des lignes non grises. Une case non cochée n'est jamais un critère.
+  var contrasted = states.some(function(s){ return !!s.color && !s.gray && !s.inactive; });
+  states.forEach(function(s){ if (contrasted && s.gray) s.inactive = true; });
+  return states;
+}
+function parseInput(id, useTroops, forcedCol){
+  var input = $(id), res = parseFarmList(input.value, useTroops, forcedCol);
+  var meta = pastedMetadata[id];
+  var states = meta && meta.text === input.value ? meta.states : [];
+  var knownExcluded = Object.create(null);
+  targets.forEach(function(t){ if (t.active === false) knownExcluded[targetKey(t)] = t.excludedBy; });
+  res.items = res.items.filter(function(t){
+    var sourceDisabled = states.some(function(s){ return s.inactive && s.name === t.name && s.dist === t.dist; });
+    var reason = sourceDisabled ? "source" : knownExcluded[targetKey(t)];
+    if (!reason) return true;
+    t.active = false; t.excludedBy = reason; res.excluded.push(t); return false;
+  });
+  var excludedKeys = new Set(res.excluded.map(targetKey));
+  res.releve = res.releve.filter(function(r){ return !excludedKeys.has(r.key); });
+  res.richClipboard = states.length > 0;
+  return res;
+}
+function bindRichPaste(id){
+  var input = $(id);
+  input.addEventListener("paste", function(e){
+    if (!e.clipboardData) return;
+    var text = e.clipboardData.getData("text/plain");
+    var html = e.clipboardData.getData("text/html");
+    // Remplacer le relevé complet : les états doivent rester associés au texte exact.
+    e.preventDefault(); input.value = text;
+    pastedMetadata[id] = {text:text, states:clipboardFarmStates(html)};
+    if (id === "paste"){
+      $("parseMsg").textContent = pastedMetadata[id].states.length
+        ? "Collage enrichi reçu. Les marqueurs de désactivation seront analysés à l’import."
+        : "Collage texte : le grisement n’est pas disponible. Utilise Exclure pour les fermes désactivées.";
+    }
+  });
+  input.addEventListener("input", function(){ delete pastedMetadata[id]; });
 }
 
 /* ---------- calcul ---------- */
@@ -819,7 +924,7 @@ function computeRow(t){
   var one = oneWay(t.dist);
   var iv = (t.interval !== null && t.interval > 0) ? t.interval : cfg.interval;
   var r = {t:t, one:one, iv:iv, cycle:null, waves:null, wave:null, total:null};
-  if (one === null || !(iv > 0)) return r;
+  if (t.active === false || one === null || !(iv > 0)) return r;
   r.cycle = 2 * one + cfg.buffer / 60;
   r.waves = Math.max(1, Math.ceil(r.cycle / iv - 1e-9));
   r.wave  = (t.wave !== null && t.wave > 0) ? t.wave : cfg.wave;
@@ -834,7 +939,9 @@ function minInterval(avail){
   for (var iv = 0.5; iv <= 240; iv += 0.5){
     var sum = 0, ok = true;
     for (var i = 0; i < targets.length; i++){
-      var t = targets[i], one = oneWay(t.dist);
+      var t = targets[i];
+      if (t.active === false) continue;
+      var one = oneWay(t.dist);
       if (one === null) continue;
       var w = Math.max(1, Math.ceil((2 * one + cfg.buffer / 60) / iv - 1e-9));
       sum += w * ((t.wave !== null && t.wave > 0) ? t.wave : cfg.wave);
@@ -864,6 +971,7 @@ function esc(s){
 }
 
 function renderTable(rows){
+  rows = rows.filter(function(r){ return r.t.active !== false; });
   var tb = $("tbody");
   if (!rows.length){
     tb.innerHTML = '<tr><td colspan="10" class="empty">Aucune cible. Colle ta liste de pillage ci-dessus.</td></tr>';
@@ -873,8 +981,8 @@ function renderTable(rows){
   var h = "";
   for (var i = 0; i < rows.length; i++){
     var r = rows[i], t = r.t;
-    h += '<tr data-i="' + i + '">'
-      + '<td class="delcell"><button type="button" class="del" data-del="' + i
+    h += '<tr data-i="' + targets.indexOf(t) + '">'
+      + '<td class="delcell"><button type="button" class="ghost" data-exclude="' + targets.indexOf(t) + '" title="Exclure cette ferme des calculs">Exclure</button><button type="button" class="del" data-del="' + targets.indexOf(t)
         + '" aria-label="Supprimer ' + esc(t.name) + '" title="Retirer cette ferme">&times;</button></td>'
       + '<td class="namecell"><input type="text" data-k="name" value="' + esc(t.name) + '" aria-label="Nom de la cible"></td>'
       + '<td class="coord">' + (t.x === null ? "—" : t.x + "|" + t.y) + '</td>'
@@ -901,6 +1009,16 @@ function renderTable(rows){
     + '<td class="out total">' + fmt(sumT) + '</td></tr>';
 }
 
+function renderExcluded(){
+  var excluded = targets.filter(function(t){ return t.active === false; });
+  $("excludedFarms").hidden = !excluded.length;
+  $("excludedTitle").textContent = "Fermes exclues (" + excluded.length + ") — hors calcul";
+  $("excludedList").innerHTML = excluded.map(function(t){
+    return '<li>' + esc(t.name) + ' · ' + fmt(t.dist, 2) + ' cases — '
+      + (t.excludedBy === "source" ? "désactivée dans le collage" : "exclusion manuelle")
+      + ' <button type="button" class="ghost" data-restore="' + targets.indexOf(t) + '">Réintégrer</button></li>';
+  }).join("");
+}
 function renderTiles(rows){
   var troops = 0, waves = 0, dep = 0, live = 0;
   rows.forEach(function(r){
@@ -980,6 +1098,7 @@ function render(){
         : "Renseigne une distance et un temps non nuls.")
     : "";
   renderTable(rows);
+  renderExcluded();
   renderTiles(rows);
   renderChart(rows);
   save();
@@ -1291,6 +1410,8 @@ function syncForm(){
 }
 
 function bind(){
+  bindRichPaste("paste");
+  bindRichPaste("yPaste");
   var o = "";
   for (var i = 0; i <= 20; i++) o += '<option value="' + i + '">' + (i === 0 ? "Aucune" : "Niveau " + i) + '</option>';
   $("ts").innerHTML = o;
@@ -1350,7 +1471,33 @@ function bind(){
   }
   function clearUndo(){ undo = null; $("undoBar").hidden = true; }
 
+  $("excludeBatch").addEventListener("click", function(){
+    var res = parseFarmList($("excludePaste").value, false, -1);
+    var keys = new Set(res.items.concat(res.excluded).map(targetKey));
+    var matched = new Set();
+    targets.forEach(function(t){
+      var key = targetKey(t);
+      if (keys.has(key)){ t.active = false; t.excludedBy = "manual"; matched.add(key); }
+    });
+    $("excludeMsg").textContent = keys.size
+      ? matched.size + " ferme(s) exclue(s). " + (keys.size - matched.size) + " absente(s) de la liste actuelle."
+      : "Aucune ferme reconnue : colle leurs lignes complètes avec nom et distance.";
+    render();
+  });
+  $("excludedList").addEventListener("click", function(e){
+    var button = e.target.closest("[data-restore]");
+    if (!button) return;
+    var t = targets[Number(button.dataset.restore)];
+    if (!t) return;
+    t.active = true; t.excludedBy = null; render();
+  });
   $("tbody").addEventListener("click", function(e){
+    var exclude = e.target.closest("[data-exclude]");
+    if (exclude){
+      var t = targets[Number(exclude.dataset.exclude)];
+      if (t){ t.active = false; t.excludedBy = "manual"; render(); }
+      return;
+    }
     var b = e.target.closest("[data-del]");
     if (!b) return;
     var i = parseInt(b.dataset.del, 10);
@@ -1419,7 +1566,7 @@ function bind(){
   }
   function showPreview(res, txt){
     var box = $("parsePreview"), found = res.items, rejected = res.rejected || [];
-    if (!found.length && !rejected.length){ box.hidden = true; box.innerHTML = ""; return; }
+    if (!found.length && !rejected.length && !res.excluded.length){ box.hidden = true; box.innerHTML = ""; return; }
     var srcLines = txt.split(String.fromCharCode(10)).filter(function(l){ return l.trim(); }).length;
 
     var h = '<p style="margin:0 0 7px; font-size:12px; color:var(--ink-2)"><strong>'
@@ -1444,6 +1591,13 @@ function bind(){
           + (f.wave !== null ? ' · ' + f.wave + ' tr.' : '') + '</li>';
       }
       h += '</ol>';
+    }
+    if (res.excluded.length){
+      h += '<p><strong>' + res.excluded.length + ' ferme(s) exclue(s) des calculs :</strong> '
+        + res.excluded.map(function(t){ return esc(t.name); }).join(", ") + '</p>';
+    }
+    if (!res.richClipboard){
+      h += '<p class="note">Grisement absent du texte : vérifie les cibles et utilise Exclure si nécessaire.</p>';
     }
     if (rejected.length){
       h += '<details><summary>' + rejected.length + ' fragment' + (rejected.length > 1 ? 's' : '')
@@ -1470,11 +1624,11 @@ function bind(){
       $("parsePreview").hidden = true; return;
     }
     clearUndo();
-    var res = parseFarmList(txt, $("pTroops").value === "1", parseInt($("pDistCol").value, 10));
-    var found = res.items;
+    var res = parseInput("paste", $("pTroops").value === "1", parseInt($("pDistCol").value, 10));
+    var found = res.items, imported = found.concat(res.excluded);
     showPreview(res, txt);
 
-    if (!found.length){
+    if (!imported.length){
       msg.className = "parse-msg ko";
       msg.textContent = "Aucune cible complète : colle les lignes du tableau avec leurs distances, ou les cibles avec leurs coordonnées et distances."
         + (res.rejected.length ? " Ouvre le détail ci-dessus pour voir ce qui manque." : "");
@@ -1488,15 +1642,20 @@ function bind(){
     }
     var n;
     if (replace){
-      targets = found; n = found.length;
+      targets = imported; n = found.length;
       msg.className = "parse-msg ok";
       msg.textContent = n + " cible" + (n > 1 ? "s" : "") + " chargée" + (n > 1 ? "s" : "") + ", liste remplacée.";
     } else {
       var seen = {};
       targets.forEach(function(t){ seen[keyOf(t)] = 1; });
-      var added = found.filter(function(f){ return !seen[keyOf(f)]; });
+      imported.forEach(function(f){
+        if (f.active === false) targets.forEach(function(t){
+          if (keyOf(t) === keyOf(f)){ t.active = false; t.excludedBy = f.excludedBy; }
+        });
+      });
+      var added = imported.filter(function(f){ return !seen[keyOf(f)]; });
       targets = targets.concat(added);
-      n = added.length;
+      n = added.filter(function(t){ return t.active !== false; }).length;
       if (!n){
         msg.className = "parse-msg";
         msg.textContent = "Les " + found.length + " cibles lues sont déjà dans la liste.";
@@ -1506,6 +1665,7 @@ function bind(){
           + (found.length > n ? " · " + (found.length - n) + " déjà présente(s)" : "") + ".";
       }
     }
+    msg.textContent += " " + targets.filter(function(t){ return t.active === false; }).length + " ferme(s) exclue(s), hors calcul.";
     render();
   }
 
@@ -1539,8 +1699,11 @@ function bind(){
   $("ySave").addEventListener("click", function(){
     var txt = $("yPaste").value, msg = $("yMsg");
     if (!txt.trim()){ msg.className = "parse-msg ko"; msg.textContent = "Le cadre est vide."; return; }
-    var res = parseFarmList(txt, false, -1);
+    var res = parseInput("yPaste", false, -1);
     var avecCumul = res.releve.filter(function(r){ return r.cumul !== null; });
+    if (!avecCumul.length && res.excluded.length && !res.items.length){
+      msg.className = "parse-msg"; msg.textContent = "Toutes les fermes de ce relevé sont exclues : aucun relevé enregistré."; return;
+    }
     if (!avecCumul.length){
       msg.className = "parse-msg ko";
       msg.textContent = res.releve.length

@@ -25,11 +25,23 @@ et sa distance. Deux villages de même nom et même distance ne peuvent donc pas
 distingués sans coordonnées ; un changement de nom ou de distance crée une nouvelle
 identité pour le suivi du rendement. Aucune coordonnée n'est inventée.
 
-Une ferme explicitement marquée « désactivée » ou « inactive » dans une cellule de
-statut après les données de sa ligne, ou sur une ligne suivante, est exclue. Une
-icône ou une case à cocher non transmise dans le texte ne permet pas de connaître
-cet état : copier uniquement les fermes actives dans ce cas. L'absence de dernier
-pillage ne signifie pas que la ferme est désactivée.
+Le collage direct (Ctrl + V) conserve aussi le HTML du presse-papiers, lorsqu'il
+est fourni par le navigateur. Ses marqueurs de désactivation (classes de ligne,
+état explicite, opacité, ou couleur grise contrastant avec les autres cibles)
+permettent d'isoler les fermes désactivées. Le HTML est lu dans un template inerte,
+jamais inséré dans l'interface ni enregistré ou synchronisé.
+
+Les fermes désactivées sont regroupées dans « Fermes exclues », hors calcul de
+troupes, de groupes, de faisabilité et de départs. Le bouton « Exclure » et le
+collage d'une liste de fermes à exclure permettent de corriger un collage dont
+l'état visuel est absent. « Réintégrer » annule l'exclusion ; un nouveau collage
+explicitement désactivé l'applique de nouveau. Les exclusions restent enregistrées
+localement et sont conservées lors des prochains imports. Les nouveaux relevés de
+rendement ignorent également les fermes exclues, sans effacer les anciens relevés.
+
+Une case non cochée, un butin nul ou l'absence de dernier pillage ne suffisent pas
+à établir une désactivation. La détection automatique dépend des métadonnées
+réellement conservées par le navigateur ; le texte seul ne contient pas le grisement.
 
 Travian enrobe ses nombres de marques bidirectionnelles invisibles : le lecteur
 les retire et gère les séparateurs de milliers avant analyse. Le diagnostic ligne
@@ -46,7 +58,8 @@ règles d'accès le permettent ; le mode local reste disponible sinon.
 
 Avec Node.js, depuis le dossier du dépôt :
 
-    node tests/parser.test.cjs
+    npm ci
+    npm test
 
 ## Déploiement
 
