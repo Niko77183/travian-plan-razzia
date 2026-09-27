@@ -285,7 +285,8 @@ details.meth ul{padding-left:18px; margin:10px 0 0; color:var(--ink-2); font-siz
 
     <section class="panel">
       <h2>Coller la liste de pillage</h2>
-      <p class="hint">S&eacute;lectionne la page du point de ralliement et colle-la enti&egrave;re. Une cible est retenue si elle a un nom, des coordonn&eacute;es et une distance &mdash; le reste de la page est &eacute;cart&eacute;.</p>
+      <p class="hint">S&eacute;lectionne la page du point de ralliement et colle-la enti&egrave;re. Les villages et les oasis sont reconnus par leurs coordonn&eacute;es ou les colonnes du tableau, quel que soit leur nom. Les coordonn&eacute;es absentes restent indiqu&eacute;es par un tiret.</p>
+      <p class="note">Les fermes explicitement marqu&eacute;es &laquo; d&eacute;sactiv&eacute;e &raquo; ou &laquo; inactive &raquo; dans le collage sont exclues. Si leur &eacute;tat n&rsquo;est indiqu&eacute; que par une ic&ocirc;ne, le texte seul ne permet pas de le d&eacute;tecter : copie uniquement les fermes actives. Sans coordonn&eacute;es, une cible est identifi&eacute;e par son nom et sa distance.</p>
       <textarea id="paste" spellcheck="false" placeholder="Oasis inoccupée (17|−62)	0	2.2	1"></textarea>
       <div class="btns" style="margin-top:10px">
         <button type="button" id="parseReplace">Remplacer la liste</button>
@@ -570,9 +571,46 @@ function fusionneMilliers(str){
   return out;
 }
 
+/* Les cellules du tableau séparent le nom (qui peut contenir des chiffres)
+   de la population et de la distance. Les coordonnées peuvent être absentes
+   du texte copié : elles ne sont pas déduites de la distance. */
+function targetKey(t){
+  if (t.x !== null && t.x !== undefined && t.y !== null && t.y !== undefined) return t.x + "|" + t.y;
+  // Encodage compatible avec les clés Firebase, sans fusionner toutes les
+  // cibles dépourvues de coordonnées sous « null|null ».
+  return "village:" + Array.from(JSON.stringify([t.name, t.dist])).map(function(c){
+    return c.codePointAt(0).toString(16);
+  }).join("-");
+}
+function isInactiveLabel(text){
+  return /^(?:(?:ferme|cible|village)\s+)?(?:désactivé(?:e)?|desactive(?:e)?|inacti(?:f|ve)|disabled|inactive)$/i.test(text.trim());
+}
 function scanLine(line){
-  var f = {name:"", x:null, y:null, nums:[], times:[]};
+  var f = {name:"", x:null, y:null, nums:[], times:[], structured:false, inactive:false};
   var rest = stripInvis(fusionneMilliers(line));
+  var cells = rest.split("\t").map(function(c){ return c.trim(); }).filter(Boolean);
+  var cellNumber = /^\d+(?:[.,]\d+)?$/;
+  if (cells.length >= 3 && cellNumber.test(cells[1]) && cellNumber.test(cells[2])){
+    f.structured = true;
+    COORD_RE.lastIndex = 0;
+    var coord = COORD_RE.exec(cells[0]);
+    if (coord){ f.x = toInt(coord[1]); f.y = toInt(coord[2]); }
+    COORD_RE.lastIndex = 0;
+    f.name = cells[0].replace(COORD_RE, "").trim();
+    f.inactive = cells.slice(3).some(isInactiveLabel);
+    rest = cells.slice(1).filter(function(c){ return !isInactiveLabel(c); }).join("\t");
+  } else if (isInactiveLabel(rest)){
+    f.inactive = true;
+    return f;
+  } else {
+    // Préserver le nom entier situé avant les coordonnées, chiffres compris.
+    COORD_RE.lastIndex = 0;
+    var namedCoord = COORD_RE.exec(rest);
+    if (namedCoord && namedCoord.index > 0){
+      f.name = rest.slice(0, namedCoord.index).trim();
+      rest = rest.slice(namedCoord.index);
+    }
+  }
 
   COORD_RE.lastIndex = 0;
   var m = COORD_RE.exec(rest);
@@ -595,7 +633,7 @@ function scanLine(line){
   }
 
   var nameTxt = cleanName(rest.replace(NUM_RE, " "));
-  if (/[A-Za-zÀ-ɏ]{2}/.test(nameTxt) && !/^dist/i.test(nameTxt)) f.name = nameTxt;
+  if (!f.name && !f.structured && /[A-Za-zÀ-ɏ]{2}/.test(nameTxt) && !/^dist/i.test(nameTxt)) f.name = nameTxt;
   return f;
 }
 
@@ -627,7 +665,7 @@ function parseFarmList(text, useTroops, forcedCol){
   var lines = text.split(/\r?\n/);
   var recs = [], cur = null, coordCount = 0;
 
-  function fresh(){ return {name:"", x:null, y:null, nums:[], times:[]}; }
+  function fresh(){ return {name:"", x:null, y:null, nums:[], times:[], structured:false, inactive:false}; }
   function flush(){
     if (cur && (cur.name || cur.x !== null || cur.nums.length)) recs.push(cur);
     cur = null;
@@ -639,6 +677,10 @@ function parseFarmList(text, useTroops, forcedCol){
     var f = scanLine(lines[i]);
     var tr = {i: i + 1, raw: lines[i], name: f.name, x: f.x, y: f.y,
               nums: f.nums.map(function(o){ return o.v; }), act: ""};
+    if (f.inactive && !f.structured){
+      if (cur) cur.inactive = true;
+      tr.act = "ferme désactivée"; trace.push(tr); continue;
+    }
     /* une ligne qui ne porte qu'une heure n'est pas vide : c'est l'heure
        du dernier pillage de la ferme en cours */
     if (!f.name && f.x === null && !f.nums.length && !f.times.length){
@@ -647,10 +689,12 @@ function parseFarmList(text, useTroops, forcedCol){
     if (f.x !== null) coordCount++;
     /* un nouveau nom ouvre toujours une nouvelle ferme */
     var opened = false;
-    if (f.name && cur && cur.name){ flush(); }
+    if (cur && (f.structured || (f.name && cur.name))){ flush(); }
     else if (cur && f.x !== null && cur.x !== null){ flush(); }
     if (!cur){ cur = fresh(); opened = true; }
     if (f.name && !cur.name) cur.name = f.name;
+    cur.structured = cur.structured || f.structured;
+    cur.inactive = cur.inactive || f.inactive;
     if (f.x !== null && cur.x === null){ cur.x = f.x; cur.y = f.y; }
     cur.nums = cur.nums.concat(f.nums);
     cur.times = cur.times.concat(f.times);
@@ -664,7 +708,7 @@ function parseFarmList(text, useTroops, forcedCol){
      ligne parasite a coupee en deux. */
   for (var q = 0; q < recs.length - 1; q++){
     var A = recs[q], B = recs[q + 1];
-    if (A.name && A.x !== null && !A.nums.length && B.x === null && B.nums.length){
+    if (A.name && A.x !== null && !A.nums.length && !B.structured && B.x === null && B.nums.length){
       A.nums = A.nums.concat(B.nums);
       A.times = A.times.concat(B.times);
       recs.splice(q + 1, 1);
@@ -674,22 +718,24 @@ function parseFarmList(text, useTroops, forcedCol){
 
   /* Seules les fiches qui peuvent devenir des cibles votent pour la colonne :
      le reste de la page (ressources, menus, copyright) n'a pas voix au chapitre. */
-  var candidates = recs.filter(function(r){ return r.name && r.x !== null; });
+  var candidates = recs.filter(function(r){ return r.x !== null && !r.structured && !r.inactive; });
   var col = (forcedCol !== null && forcedCol !== undefined && forcedCol >= 0)
     ? forcedCol : inferDistCol(candidates.length ? candidates : recs);
 
   var items = [], releve = [], rejected = [], seen = {};
   for (var r2 = 0; r2 < recs.length; r2++){
     var rec = recs[r2];
+    if (rec.inactive){ rejected.push({label:describeRec(rec), why:["ferme désactivée"]}); continue; }
     var dist = null, usedIdx = -1;
-    if (col >= 0 && col < rec.nums.length && rec.nums[col].v > 0 && rec.nums[col].v <= 500){
-      dist = rec.nums[col].v; usedIdx = col;
+    var recCol = forcedCol >= 0 && forcedCol !== null && forcedCol !== undefined
+      ? forcedCol : (rec.structured ? 1 : col);
+    if (recCol >= 0 && recCol < rec.nums.length && rec.nums[recCol].v > 0 && rec.nums[recCol].v <= 500){
+      dist = rec.nums[recCol].v; usedIdx = recCol;
     }
 
     var why = [];
-    if (!rec.name) why.push("nom");
-    if (rec.x === null) why.push("coordonnées");
-    if (dist === null) why.push("distance");
+    if (rec.x === null && !rec.structured) why.push("coordonnées ou ligne de tableau manquantes");
+    if (dist === null) why.push("distance manquante");
     if (why.length){ rejected.push({label: describeRec(rec), why: why}); continue; }
 
     var wave = null;
@@ -698,10 +744,10 @@ function parseFarmList(text, useTroops, forcedCol){
         if (!rec.nums[j].dec && rec.nums[j].v > 0){ wave = rec.nums[j].v; break; }
       }
     }
-    var key = rec.x + "|" + rec.y;
+    var nom = rec.name || "Village (" + rec.x + "|" + rec.y + ")";
+    var key = targetKey({name:nom, x:rec.x, y:rec.y, dist:dist});
     if (seen[key]) continue;
     seen[key] = 1;
-    var nom = rec.name.slice(0, 48);
     items.push(blank({name:nom, x:rec.x, y:rec.y, dist:dist, wave:wave}));
 
     /* Colonne "Dernier pillage" : apres la distance et les troupes viennent
@@ -723,7 +769,7 @@ function parseFarmList(text, useTroops, forcedCol){
   }
 
   return {
-    items: items, releve: releve, rejected: rejected, col: col, trace: trace,
+    items: items, releve: releve, rejected: rejected, col: recs.some(function(r){ return r.structured; }) && !(forcedCol >= 0) ? 1 : col, trace: trace,
     width: recs.reduce(function(a, r){ return Math.max(a, r.nums.length); }, 0),
     coordCount: coordCount, recCount: recs.length
   };
@@ -1203,7 +1249,7 @@ function renderYield(){
     var c = f24 && f24.parFerme[k] !== undefined ? f24.parFerme[k] : null;
     if (r) tot.r += r; if (a) tot.a += a; if (b) tot.b += b; if (c) tot.c += c;
     h += '<tr><td class="namecell">' + esc(nomDe(k)) + '</td>'
-      + '<td class="coord">' + esc(k) + '</td>'
+      + '<td class="coord">' + (/^-?\d+\|-?\d+$/.test(k) ? esc(k) : '—') + '</td>'
       + '<td class="out strong">' + val(r) + '</td>'
       + '<td class="out">' + val(a, f1 && !f1.mesure) + '</td>'
       + '<td class="out">' + val(b, f12 && !f12.mesure) + '</td>'
@@ -1378,7 +1424,7 @@ function bind(){
 
     var h = '<p style="margin:0 0 7px; font-size:12px; color:var(--ink-2)"><strong>'
       + found.length + ' cible' + (found.length > 1 ? 's' : '') + '</strong> sur ' + srcLines
-      + ' ligne' + (srcLines > 1 ? 's' : '') + '. Une cible = nom + coordonnées + distance.</p>';
+      + ' ligne' + (srcLines > 1 ? 's' : '') + '. Cibles reconnues par leurs coordonnées ou les cellules du tableau (nom, population, distance).</p>';
 
     if (res.col >= 0 && res.width){
       h += '<p style="margin:0 0 7px; font-size:12px; color:var(--ink-2)">Distance lue sur le <strong>'
@@ -1394,7 +1440,7 @@ function bind(){
       h += '<ol>';
       for (var i = 0; i < found.length; i++){
         var f = found[i];
-        h += '<li><b>' + esc(f.name) + '</b> — (' + f.x + '|' + f.y + ') · ' + fmt(f.dist, 2) + ' cases'
+        h += '<li><b>' + esc(f.name) + '</b> — ' + (f.x === null ? 'coordonnées absentes' : '(' + f.x + '|' + f.y + ')') + ' · ' + fmt(f.dist, 2) + ' cases'
           + (f.wave !== null ? ' · ' + f.wave + ' tr.' : '') + '</li>';
       }
       h += '</ol>';
@@ -1404,7 +1450,7 @@ function bind(){
         + ' écarté' + (rejected.length > 1 ? 's' : '') + ' — voir pourquoi</summary><ul style="margin-top:8px">';
       var lim = Math.min(rejected.length, 30);
       for (var j = 0; j < lim; j++){
-        h += '<li>' + esc(rejected[j].label) + ' <span style="color:var(--warn)">— sans '
+        h += '<li>' + esc(rejected[j].label) + ' <span style="color:var(--warn)">— '
           + rejected[j].why.join(", ") + '</span></li>';
       }
       if (rejected.length > lim) h += '<li>… et ' + (rejected.length - lim) + ' autre(s)</li>';
@@ -1415,7 +1461,7 @@ function bind(){
     box.hidden = false;
   }
 
-  function keyOf(t){ return t.x + "|" + t.y; }
+  function keyOf(t){ return targetKey(t); }
 
   function doParse(replace, previewOnly){
     var txt = $("paste").value, msg = $("parseMsg");
@@ -1430,7 +1476,7 @@ function bind(){
 
     if (!found.length){
       msg.className = "parse-msg ko";
-      msg.textContent = "Aucune cible complète : il faut un nom, des coordonnées et une distance."
+      msg.textContent = "Aucune cible complète : colle les lignes du tableau avec leurs distances, ou les cibles avec leurs coordonnées et distances."
         + (res.rejected.length ? " Ouvre le détail ci-dessus pour voir ce qui manque." : "");
       return;
     }
@@ -1499,7 +1545,7 @@ function bind(){
       msg.className = "parse-msg ko";
       msg.textContent = res.releve.length
         ? res.releve.length + " fermes lues, mais aucune ne porte de butin cumulé. Vérifie que la colonne « Dernier pillage » est bien dans le collage."
-        : "Aucune ferme reconnue. Il faut un nom, des coordonnées et une distance par ferme.";
+        : "Aucune ferme reconnue. Colle les lignes du tableau avec leurs distances, ou les cibles avec leurs coordonnées et distances.";
       return;
     }
     var hs = findServerTime(txt);
